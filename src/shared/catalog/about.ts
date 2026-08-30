@@ -1,5 +1,5 @@
 export const APP_NAME = 'Antropometria BIA'
-export const APP_VERSION = '1.1.0'
+export const APP_VERSION = '1.2.0'
 export const APP_YEAR = 2026
 
 export const ENGINE_VERSIONS = {
@@ -25,16 +25,13 @@ export const AUTHOR = {
   github: 'https://github.com/danielegabrovec/antropometria-bia'
 }
 
-export const COPYRIGHT_SHORT = `© ${APP_YEAR} Daniele Gabrovec. Tutti i diritti riservati.`
+export const COPYRIGHT_SHORT = `© ${APP_YEAR} Daniele Gabrovec · Licenza MIT.`
 
-export const COPYRIGHT_LINE =
-  'Creato da Daniele Gabrovec · © 2026 · Tutti i diritti riservati · Vietata la riproduzione'
+export const COPYRIGHT_LINE = 'Creato da Daniele Gabrovec · © 2026 · Licenza MIT'
 
 export const COPYRIGHT_NOTICE = `Antropometria BIA è stata creata da Daniele Gabrovec.
 
-© ${APP_YEAR} Daniele Gabrovec. Tutti i diritti riservati.
-
-Vietata la riproduzione, anche parziale, la copia, la modifica, la distribuzione e qualsiasi uso non autorizzato, senza il consenso scritto dell'autore.`
+© ${APP_YEAR} Daniele Gabrovec. Software distribuito con licenza MIT: il copyright e il testo della licenza devono restare inclusi nelle copie sostanziali.`
 
 export const ABOUT = {
   name: APP_NAME,
@@ -44,10 +41,10 @@ export const ABOUT = {
   copyright: COPYRIGHT_SHORT,
   rights: [
     'Software creato da Daniele Gabrovec.',
-    `© ${APP_YEAR} Daniele Gabrovec. Tutti i diritti riservati.`,
-    'Vietata la riproduzione, anche parziale, senza autorizzazione scritta dell’autore.',
-    'Vietata la redistribuzione, la modifica e l’uso non autorizzato dell’applicazione.',
-    'Il software è fornito «così com’è», senza garanzia di alcun tipo.',
+    `© ${APP_YEAR} Daniele Gabrovec. Licenza MIT.`,
+    'Uso, copia, modifica e redistribuzione sono consentiti alle condizioni della licenza MIT.',
+    'Il copyright e il testo della licenza devono accompagnare le copie sostanziali.',
+    'Il software è fornito «così com’è», senza garanzia, come indicato nella licenza.',
     'Non è un dispositivo medico e non sostituisce AKERN/Bodygram né il giudizio clinico.'
   ]
 }

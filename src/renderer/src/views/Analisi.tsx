@@ -1,10 +1,13 @@
 import { useMemo } from 'react'
-import { assessVisit, blandAltman } from '@shared/engine'
+import { assessVisit, blandAltman, etichettaLaf } from '@shared/engine'
 import { BIVA_REFERENCE_PROFILES } from '@shared/engine'
+import { sexLabel } from '@shared/library'
 import { useApp } from '../store/useApp'
 import { patientVisits } from '../lib/delta'
 import { KpiCard } from '../components/KpiCard'
 import { Chart, CHART_BASE } from '../components/Chart'
+import { VisitContext } from '../components/VisitContext'
+import { FasciaBar } from '../components/FasciaBar'
 import { fmt } from '../lib/format'
 
 export function Analisi() {
@@ -38,13 +41,27 @@ export function Analisi() {
   return (
     <div className="wide-page">
       <div className="hair">Analisi</div>
-      <h1 className="serif text-2xl mb-4">Composizione · due origini</h1>
-      {!visit || !a ? (
-        <p className="text-[var(--color-mute)]">Apri una visita da Misura.</p>
+      <h1 className="serif text-2xl mb-3">Composizione · due origini</h1>
+      <VisitContext />
+      {!visit || !a || !assessed ? (
+        <p className="text-[var(--color-mute)] mt-3">Seleziona una visita sopra, oppure aprila da Misura.</p>
       ) : (
         <>
+          <h2 className="serif text-lg mt-5 mb-2">Fasce di normalità</h2>
+          <p className="text-[12px] text-[var(--color-mute)] mb-3">
+            Solo range pubblicati: massa grassa Gallagher 2000 (pliche, 20–79 anni), BMI OMS, WHR 0,95/0,85, WHtR 0,50. Il
+            cuneo è il valore della visita. Nessuna fascia inventata su RFM, SMI o BIA Sun.
+          </p>
+          <div className="fascia-grid mb-6">
+            {a.fasce.fat ? <FasciaBar fascia={a.fasce.fat} /> : null}
+            {a.fasce.bmi ? <FasciaBar fascia={a.fasce.bmi} /> : null}
+            {a.fasce.whr ? <FasciaBar fascia={a.fasce.whr} /> : null}
+            {a.fasce.whtr ? <FasciaBar fascia={a.fasce.whtr} /> : null}
+          </div>
+
           <h2 className="serif text-lg mb-2">Antropometria</h2>
           <div className="kpi-grid mb-6">
+            <KpiCard label="Età" value={assessed.age > 0 ? assessed.age : null} unit="anni" hint={sexLabel(assessed.sex)} />
             <KpiCard label="FM% pliche" value={a.pliche?.fmPct} unit="%" tone={a.fasce.fat?.classificazione} hint={a.fasce.fat?.fonte} />
             <KpiCard label="FM kg" value={a.pliche?.fmKg} unit="kg" />
             <KpiCard label="FFM kg" value={a.pliche?.ffmKg} unit="kg" />
@@ -58,6 +75,45 @@ export function Analisi() {
             <KpiCard label="AMA" value={a.artometria?.ama} d={1} unit="cm²" />
             <KpiCard label="Heymsfield SMM" value={a.heymsfield?.smm} unit="kg" />
             <KpiCard label="Endo / meso / ecto" value={a.somatotipo?.endo} hint={a.somatotipo?.classificazione} />
+          </div>
+
+          <h2 className="serif text-lg mb-2">Dispendio energetico</h2>
+          {assessed.energy.blocco ? (
+            <p className="text-[var(--color-copper)] mb-2">{assessed.energy.blocco}</p>
+          ) : null}
+          <div className="kpi-grid mb-3">
+            <KpiCard
+              label="BMR"
+              value={assessed.energy.bmr}
+              unit="kcal"
+              hint={assessed.energy.fallbackFfm ? 'Fallback Mifflin (manca FFM)' : assessed.energy.metodo}
+            />
+            <KpiCard label="TDEE" value={assessed.energy.tdee} unit="kcal" hint={etichettaLaf(assessed.energy.laf)} />
+          </div>
+          <div className="panel overflow-auto mb-6">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Formula BMR</th>
+                  <th>BMR</th>
+                  <th>TDEE</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {assessed.energy.confronto.map((row) => (
+                  <tr key={row.metodo}>
+                    <td>
+                      {row.label}
+                      {row.metodo === visit.formulaBmr ? ' · scelta' : ''}
+                    </td>
+                    <td className="num">{fmt(row.bmr, 0)}</td>
+                    <td className="num">{fmt(row.tdee, 0)}</td>
+                    <td>{row.fallbackFfm ? 'Mifflin (no FFM)' : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <h2 className="serif text-lg mb-2">BIA (Sun / Janssen / Sergi)</h2>
@@ -77,16 +133,29 @@ export function Analisi() {
               ))}
             </select>
           </div>
-          {assessed?.bia.blockedReason ? <p className="text-[var(--color-copper)] mb-2">{assessed.bia.blockedReason}</p> : null}
+          {assessed.bia.blockedReason ? <p className="text-[var(--color-copper)] mb-2">{assessed.bia.blockedReason}</p> : null}
+          {b?.qualityFlags.length ? (
+            <div className="quality-flags mb-3" role="status" aria-label="Avvertenze di qualità BIA">
+              {b.qualityFlags.map((flag) => (
+                <div key={`${flag.code}-${flag.message}`} className={`quality-flag ${flag.severity}`}>
+                  <strong>{flag.severity === 'blocking' ? 'Blocco' : flag.severity === 'warning' ? 'Attenzione' : 'Nota'}</strong>
+                  <span>{flag.message}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="kpi-grid mb-6">
-            <KpiCard label="PhA" value={b?.metrics.phaseAngle?.value ?? assessed?.bia.signal?.phaseAngleDeg} unit="°" />
+            <KpiCard label="PhA" value={b?.metrics.phaseAngle?.value ?? assessed.bia.signal?.phaseAngleDeg} unit="°" />
             <KpiCard label="FM% BIA" value={b?.metrics.fmPercent?.value} unit="%" />
             <KpiCard label="FFM BIA" value={b?.metrics.ffm?.value} unit="kg" />
             <KpiCard label="TBW" value={b?.metrics.tbw?.value} unit="L" />
             <KpiCard label="ECW" value={b?.metrics.ecw?.value} unit="L" />
             <KpiCard label="ICW" value={b?.metrics.icw?.value} unit="L" />
+            <KpiCard label="ECW/TBW" value={b?.metrics.ecwTbwRatio?.value} d={3} hint="stima single-frequency" />
+            <KpiCard label="ICW/TBW" value={b?.metrics.icwTbwRatio?.value} d={3} hint="stima single-frequency" />
             <KpiCard label="SMM" value={b?.metrics.skeletalMuscleMass?.value} unit="kg" />
             <KpiCard label="SMI" value={b?.metrics.skeletalMuscleIndex?.value} unit="kg/m²" />
+            <KpiCard label="BMR BIA" value={b?.metrics.bmr?.value} unit="kcal" />
             <KpiCard label="BCM strumento" value={b?.metrics.bcm?.value} unit="kg" hint={b?.metrics.bcm ? 'device' : 'non sintetizzato'} />
           </div>
 
@@ -110,10 +179,17 @@ export function Analisi() {
                     },
                     {
                       type: 'line',
+                      data: [],
+                      silent: true,
                       markLine: {
+                        symbol: 'none',
                         silent: true,
-                        data: [{ yAxis: ba.bias }, { yAxis: ba.loaLow }, { yAxis: ba.loaHigh }],
-                        lineStyle: { color: '#2dd4bf' }
+                        label: { color: '#93a0b5', fontSize: 10 },
+                        data: [
+                          { yAxis: ba.bias, name: 'bias', lineStyle: { color: '#2dd4bf' } },
+                          { yAxis: ba.loaLow, name: '−1,96 SD', lineStyle: { color: '#e8a0b0', type: 'dashed' } },
+                          { yAxis: ba.loaHigh, name: '+1,96 SD', lineStyle: { color: '#e8a0b0', type: 'dashed' } }
+                        ]
                       }
                     }
                   ]

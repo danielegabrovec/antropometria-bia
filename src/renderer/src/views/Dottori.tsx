@@ -1,93 +1,8 @@
 import { useState } from 'react'
-import type { DoctorProfile } from '@shared/types'
-import { doctorLabel, emptyDoctor } from '@shared/library'
+import { doctorLabel } from '@shared/library'
 import { useApp } from '../store/useApp'
 import { flushPersist, switchWorkspace, deleteWorkspaceFiles } from '../lib/persist'
-
-function DoctorFields({
-  value,
-  onChange
-}: {
-  value: DoctorProfile
-  onChange: (p: Partial<DoctorProfile>) => void
-}) {
-  return (
-    <div className="form-grid">
-      <div className="field">
-        <label>Titolo</label>
-        <input value={value.titolo} onChange={(e) => onChange({ titolo: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Nome</label>
-        <input value={value.nome} onChange={(e) => onChange({ nome: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Cognome</label>
-        <input value={value.cognome} onChange={(e) => onChange({ cognome: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Qualifica</label>
-        <input value={value.qualification} onChange={(e) => onChange({ qualification: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Codice fiscale</label>
-        <input value={value.fiscalCode} onChange={(e) => onChange({ fiscalCode: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>P. IVA</label>
-        <input value={value.vatNumber} onChange={(e) => onChange({ vatNumber: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Ordine</label>
-        <input value={value.orderName} onChange={(e) => onChange({ orderName: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>N. iscrizione</label>
-        <input value={value.orderNumber} onChange={(e) => onChange({ orderNumber: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Struttura</label>
-        <input value={value.structure} onChange={(e) => onChange({ structure: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Indirizzo</label>
-        <input value={value.address} onChange={(e) => onChange({ address: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>CAP</label>
-        <input value={value.zip} onChange={(e) => onChange({ zip: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Città</label>
-        <input value={value.city} onChange={(e) => onChange({ city: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Telefono</label>
-        <input value={value.phone} onChange={(e) => onChange({ phone: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Cellulare</label>
-        <input value={value.mobile} onChange={(e) => onChange({ mobile: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>Email</label>
-        <input value={value.email} onChange={(e) => onChange({ email: e.target.value })} />
-      </div>
-      <div className="field">
-        <label>PEC</label>
-        <input value={value.pec} onChange={(e) => onChange({ pec: e.target.value })} />
-      </div>
-      <div className="field" style={{ gridColumn: '1 / -1' }}>
-        <label>Sito</label>
-        <input value={value.website} onChange={(e) => onChange({ website: e.target.value })} />
-      </div>
-      <div className="field" style={{ gridColumn: '1 / -1' }}>
-        <label>Note</label>
-        <textarea value={value.notes} onChange={(e) => onChange({ notes: e.target.value })} />
-      </div>
-    </div>
-  )
-}
+import { CreateDoctorDialog, DoctorFields } from '../components/anagrafica'
 
 export function Dottori() {
   const workspace = useApp((s) => s.workspace)
@@ -102,7 +17,10 @@ export function Dottori() {
   const createIsolated = useApp((s) => s.createIsolatedWorkspace)
   const drop = useApp((s) => s.dropCurrentWorkspace)
   const [q, setQ] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [creatingFolder, setCreatingFolder] = useState(false)
   const selected = doctors.find((d) => d.id === active) ?? doctors[0] ?? null
+  const selectedVisitCount = selected ? visits.filter((v) => v.operatorDoctorId === selected.id).length : 0
   const filtered = doctors.filter((d) =>
     `${d.nome} ${d.cognome} ${d.email} ${d.qualification}`.toLowerCase().includes(q.trim().toLowerCase())
   )
@@ -121,13 +39,7 @@ export function Dottori() {
           ))}
         </div>
         {workspace?.kind === 'studio' ? (
-          <button
-            className="primary w-full mt-3"
-            onClick={() => {
-              const id = addDoctor({ nome: 'Nuovo', cognome: 'Dottore' })
-              setActive(id)
-            }}
-          >
+          <button className="primary w-full mt-3" onClick={() => setCreating(true)}>
             + Dottore nello studio
           </button>
         ) : (
@@ -135,17 +47,7 @@ export function Dottori() {
             Cartella personale: un solo dottore. Per un collega crea una nuova cartella.
           </p>
         )}
-        <button
-          className="ghost w-full mt-2"
-          onClick={() => {
-            const nome = window.prompt('Nome e cognome del dottore della nuova cartella personale')
-            if (!nome) return
-            const parts = nome.trim().split(/\s+/)
-            flushPersist()
-            createIsolated({ nome: parts.slice(1).join(' ') || parts[0], cognome: parts[0] }, nome)
-            flushPersist()
-          }}
-        >
+        <button className="ghost w-full mt-2" onClick={() => setCreatingFolder(true)}>
           Nuova cartella personale
         </button>
         <div className="hair mt-4 mb-2">Apri cartella</div>
@@ -166,12 +68,14 @@ export function Dottori() {
           <>
             <h1 className="serif text-2xl mb-1">{doctorLabel(selected)}</h1>
             <p className="text-[13px] text-[var(--color-mute)] mb-4">
-              {workspace?.name} · {visits.filter((v) => v.operatorDoctorId === selected.id).length} visite come operatore
+              {workspace?.name} · {selectedVisitCount} visite come operatore
             </p>
             <DoctorFields value={selected} onChange={(p) => upsert({ id: selected.id, ...p })} />
             {doctors.length > 1 ? (
               <button
                 className="ghost mt-4"
+                disabled={selectedVisitCount > 0}
+                title={selectedVisitCount > 0 ? 'Il dottore è associato a visite storiche e non può essere eliminato.' : undefined}
                 onClick={() => {
                   if (!window.confirm(`Eliminare ${doctorLabel(selected)} da questa cartella?`)) return
                   remove(selected.id)
@@ -182,22 +86,48 @@ export function Dottori() {
             ) : (
               <button
                 className="ghost mt-4"
-                onClick={() => {
+                onClick={async () => {
                   if (!window.confirm('Eliminare l’intera cartella (pazienti e visite)?')) return
+                  await flushPersist()
                   const { removedId, next } = drop()
-                  void deleteWorkspaceFiles(removedId)
-                  if (next.activeWorkspaceId) void switchWorkspace(next.activeWorkspaceId)
-                  flushPersist()
+                  await deleteWorkspaceFiles(removedId)
+                  if (next.activeWorkspaceId) await switchWorkspace(next.activeWorkspaceId)
+                  else await flushPersist()
                 }}
               >
                 Elimina questa cartella
               </button>
             )}
+            {selectedVisitCount > 0 && doctors.length > 1 ? (
+              <p className="text-[12px] text-[var(--color-mute)] mt-2">
+                Per preservare la firma storica delle visite, questo profilo non può essere eliminato finché è associato a rilevazioni.
+              </p>
+            ) : null}
           </>
         )}
       </div>
+      <CreateDoctorDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="Nuovo dottore nello studio"
+        onCreate={(d) => {
+          const id = addDoctor(d)
+          setActive(id)
+        }}
+      />
+      <CreateDoctorDialog
+        open={creatingFolder}
+        onClose={() => setCreatingFolder(false)}
+        title="Nuova cartella personale"
+        hint="Compila l’anagrafica del dottore. Nome e cognome sono obbligatori; gli altri campi puoi lasciarli vuoti."
+        saveLabel="Crea cartella"
+        folderName
+        onCreate={async (d, name) => {
+          await flushPersist()
+          createIsolated(d, name ?? '')
+          await flushPersist()
+        }}
+      />
     </div>
   )
 }
-
-void emptyDoctor

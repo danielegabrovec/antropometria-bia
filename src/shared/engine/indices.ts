@@ -40,7 +40,7 @@ export function calculateConicityIndex(vitaCm: number, altezzaCm: number, pesoKg
 }
 
 export function calculateRfm(vitaCm: number, altezzaCm: number, sesso: Sex | null): number | null {
-  if (!(vitaCm > 0) || !(altezzaCm > 0) || sesso === 'Altro' || !sesso) return null
+  if (!(vitaCm > 0) || !(altezzaCm > 0) || (sesso !== 'M' && sesso !== 'F')) return null
   return 64 - 20 * (altezzaCm / vitaCm) + 12 * (sesso === 'M' ? 0 : 1)
 }
 
@@ -91,6 +91,20 @@ export function calculateHeymsfieldSMM(input: {
   if (!art || !(input.altezzaCm > 0)) return null
   return { ama: art.ama, smm: input.altezzaCm * (0.0264 + 0.0029 * art.ama) }
 }
+
+export const EQ_SUPERFICIE_OPTIONS = [
+  { value: 'DuBois' as const, label: 'DuBois' },
+  { value: 'Mosteller' as const, label: 'Mosteller' }
+]
+
+export const PESO_TEORICO_OPTIONS = [
+  { value: 'BMI' as const, label: 'BMI 22' },
+  { value: 'Lorenz' as const, label: 'Lorenz' },
+  { value: 'Broca' as const, label: 'Broca' },
+  { value: 'Devine' as const, label: 'Devine' },
+  { value: 'Robinson' as const, label: 'Robinson' },
+  { value: 'Hamwi' as const, label: 'Hamwi' }
+]
 
 export function calculatePesoIdeale(
   formula: 'BMI' | 'Lorenz' | 'Broca' | 'Devine' | 'Robinson' | 'Hamwi',

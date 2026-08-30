@@ -1,4 +1,4 @@
-import { calcolaEta, calcolaBmrConMetodo, normalizzaSesso } from './energia'
+import { calcolaEta, calcolaBmrConMetodo, calcolaTdee, confrontoMetodiBmr, motivoBmrMancante, normalizzaSesso } from './energia'
 import { calcolaPlicometriaStrict } from './plicometria'
 import { EQ_DENSITA_TO_STRICT, SKINFOLD_SITES, explainSkinfoldResult } from './skinfold-sites'
 import { formulePerEta } from './formule-per-eta'
@@ -90,6 +90,18 @@ export interface AnthropometryAssessment {
   distribution: ReturnType<typeof computeDistribution>
 }
 
+export interface EnergyAssessment {
+  bmr: number | null
+  tdee: number | null
+  laf: number
+  metodo: string
+  fallbackFfm: boolean
+  ffmKg: number | null
+  ffmFonte: 'pliche' | 'bia' | null
+  blocco: string | null
+  confronto: ReturnType<typeof confrontoMetodiBmr>
+}
+
 export interface BiaView {
   signal: NormalizedBiaSignal | null
   assessment: BiaAssessmentV2 | null
@@ -100,6 +112,7 @@ export interface VisitAssessment {
   age: number
   sex: 'M' | 'F' | null
   anthro: AnthropometryAssessment
+  energy: EnergyAssessment
   bia: BiaView
 }
 
@@ -161,18 +174,6 @@ export function assessVisit(patient: PatientProfile, visit: Visit): VisitAssessm
   const whtr = h ? calculateWhtr(m.vita ?? 0, h) : null
   const bsa =
     w && h ? (visit.eqSuperficie === 'Mosteller' ? calculateMosteller(w, h) : calculateDuBois(w, h)) : null
-  const ffmForBmr = pliche?.ffmKg ?? null
-  const bmrRaw =
-    w && h && age > 0
-      ? calcolaBmrConMetodo({
-          metodo: visit.formulaBmr,
-          pesoKg: w,
-          altezzaCm: h,
-          etaAnni: age,
-          sesso: sex,
-          ffmKg: ffmForBmr
-        })
-      : null
 
   const anthro: AnthropometryAssessment = {
     bmi,
@@ -214,7 +215,7 @@ export function assessVisit(patient: PatientProfile, visit: Visit): VisitAssessm
             circPolpaccioCm: m.polpaccio ?? 0
           })
         : null,
-    bmr: bmrRaw && bmrRaw.bmr > 0 ? { bmr: bmrRaw.bmr, fallbackFfm: bmrRaw.fallbackFfm, metodo: visit.formulaBmr } : null,
+    bmr: null,
     fasce: {
       fat: fasciaMassaGrassa(pliche?.fmPct, sex, age),
       whr: fasciaWhr(whr, sex),
@@ -235,7 +236,43 @@ export function assessVisit(patient: PatientProfile, visit: Visit): VisitAssessm
   }
 
   const bia = assessBia(visit, sex, age, w, h)
-  return { age, sex, anthro, bia }
+  const ffmPliche = pliche?.ffmKg && pliche.ffmKg > 0 ? pliche.ffmKg : null
+  const ffmBia = bia.assessment?.metrics.ffm?.value && bia.assessment.metrics.ffm.value > 0 ? bia.assessment.metrics.ffm.value : null
+  const ffmKg = ffmPliche ?? ffmBia
+  const ffmFonte: EnergyAssessment['ffmFonte'] = ffmPliche ? 'pliche' : ffmBia ? 'bia' : null
+  const blocco = motivoBmrMancante({ pesoKg: w, altezzaCm: h, etaAnni: age, sesso: sex })
+  const bmrRaw = blocco
+    ? null
+    : calcolaBmrConMetodo({
+        metodo: visit.formulaBmr,
+        pesoKg: w,
+        altezzaCm: h,
+        etaAnni: age,
+        sesso: sex,
+        ffmKg
+      })
+  const bmr = bmrRaw && bmrRaw.bmr > 0 ? bmrRaw.bmr : null
+  const tdee = bmr != null ? calcolaTdee(bmr, visit.laf) : null
+  anthro.bmr = bmr != null && bmrRaw ? { bmr, fallbackFfm: bmrRaw.fallbackFfm, metodo: visit.formulaBmr } : null
+  const energy: EnergyAssessment = {
+    bmr,
+    tdee: tdee && tdee > 0 ? tdee : null,
+    laf: visit.laf,
+    metodo: visit.formulaBmr,
+    fallbackFfm: bmrRaw?.fallbackFfm ?? false,
+    ffmKg,
+    ffmFonte,
+    blocco,
+    confronto: confrontoMetodiBmr({
+      pesoKg: w,
+      altezzaCm: h,
+      etaAnni: age,
+      sesso: sex,
+      ffmKg,
+      laf: visit.laf
+    })
+  }
+  return { age, sex, anthro, energy, bia }
 }
 
 function assessBia(
@@ -268,7 +305,7 @@ function assessBia(
   const normalized = normalizeBiaSignal(signalInput)
   const signal = normalized.ok ? normalized.signal : null
   if (!sex)
-    return { signal, assessment: null, blockedReason: 'Sesso M/F richiesto per Sun, Janssen e BIVA.' }
+    return { signal, assessment: null, blockedReason: 'Sesso Maschio o Femmina richiesto per Sun, Janssen e BIVA.' }
   if (!(age > 0) || !(weightKg && weightKg > 0) || !(heightCm && heightCm > 0))
     return { signal, assessment: null, blockedReason: 'Peso, altezza ed età servono alle stime BIA.' }
 
@@ -302,7 +339,7 @@ function assessBia(
     signal: signalInput,
     subject: { ageYears: age, sexForEquation: sex, heightCm, weightKg, measuredAt: visit.date },
     referenceProfileId: visit.bia.bivaProfileId,
-    bmrMethod: 'Cunningham',
+    bmrMethod: visit.formulaBmr,
     deviceMetrics
   })
   return { signal, assessment, blockedReason: null }

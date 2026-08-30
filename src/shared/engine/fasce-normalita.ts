@@ -169,54 +169,149 @@ export function coloreFascia(
   return "#64748b";
 }
 
+export type CinqueZone = {
+  scaleMin: number
+  scaleMax: number
+  redLo: [number, number]
+  orangeLo: [number, number]
+  green: [number, number]
+  orangeHi: [number, number]
+  redHi: [number, number]
+}
+
+/** Cinque bande per la barra (rosso inf. · arancio inf. · verde · arancio sup. · rosso sup.). */
+export function boundsCinqueZone(fascia: FasciaNormale): CinqueZone | null {
+  if (fascia.low == null || fascia.high == null) return null
+  const v = fascia.valore
+  if (fascia.id === "bmi") {
+    const scaleMin = Math.min(12, v)
+    const scaleMax = Math.max(42, v)
+    return {
+      scaleMin,
+      scaleMax,
+      redLo: [scaleMin, 16],
+      orangeLo: [16, 18.5],
+      green: [18.5, 25],
+      orangeHi: [25, 30],
+      redHi: [30, scaleMax],
+    }
+  }
+  if (fascia.id === "whr" || fascia.id === "whtr") {
+    const soglia = fascia.high
+    const scaleMin = 0
+    const scaleMax = Math.max(soglia * 1.45, v * 1.12, soglia + 0.12)
+    const orangeEnd = soglia + (scaleMax - soglia) * 0.4
+    return {
+      scaleMin,
+      scaleMax,
+      redLo: [0, 0],
+      orangeLo: [0, 0],
+      green: [0, soglia],
+      orangeHi: [soglia, orangeEnd],
+      redHi: [orangeEnd, scaleMax],
+    }
+  }
+  const lo = fascia.low
+  const hi = fascia.high
+  const span = Math.max(hi - lo, 0.5)
+  const orange = span * 0.45
+  const scaleMin = Math.min(0, v, lo - orange * 2)
+  const scaleMax = Math.max(v * 1.08, hi + orange * 2)
+  const orangeLo0 = Math.max(scaleMin, lo - orange)
+  const orangeHi1 = Math.min(scaleMax, hi + orange)
+  return {
+    scaleMin,
+    scaleMax,
+    redLo: [scaleMin, orangeLo0],
+    orangeLo: [orangeLo0, lo],
+    green: [lo, hi],
+    orangeHi: [hi, orangeHi1],
+    redHi: [orangeHi1, scaleMax],
+  }
+}
+
+export function tonoCinqueZone(
+  valore: number,
+  z: CinqueZone,
+): "rosso-inf" | "arancio-inf" | "verde" | "arancio-sup" | "rosso-sup" {
+  if (valore < z.green[0]) return valore < z.orangeLo[0] ? "rosso-inf" : "arancio-inf"
+  if (valore <= z.green[1]) return "verde"
+  return valore <= z.orangeHi[1] ? "arancio-sup" : "rosso-sup"
+}
+
+function xOnScale(value: number, z: CinqueZone, x0: number, trackW: number) {
+  const t = (value - z.scaleMin) / Math.max(z.scaleMax - z.scaleMin, 0.001)
+  return x0 + Math.max(0, Math.min(1, t)) * trackW
+}
+
 /**
- * Barra orizzontale con marker. Se manca la fascia (fuori Gallagher) si
- * disegna solo il valore, senza zona colorata inventata.
+ * Barra orizzontale a cinque zone con cuneo sul valore.
+ * Se manca la fascia (fuori Gallagher) si disegna solo il valore.
  */
 export function renderGaugeFasciaSvg(
   fascia: FasciaNormale,
   options: { idPrefix?: string; width?: number; locale?: GaugeLocale } = {},
 ): string {
-  const w = options.width ?? 280;
-  const h = 56;
-  const locale = options.locale ?? "it";
-  const titolo =
-    locale === "en" ? TITOLI_EN[fascia.id] : fascia.titolo;
-  const id = String(options.idPrefix ?? fascia.id).replace(
-    /[^a-zA-Z0-9_-]/g,
-    "-",
-  );
-  const colore = coloreFascia(fascia.classificazione);
-  const valore = num(
-    fascia.valore,
-    fascia.id === "whr" || fascia.id === "whtr" ? 2 : 1,
-    locale,
-  );
-  if (fascia.low == null || fascia.high == null) {
+  const w = options.width ?? 320
+  const h = 72
+  const locale = options.locale ?? "it"
+  const titolo = locale === "en" ? TITOLI_EN[fascia.id] : fascia.titolo
+  const id = String(options.idPrefix ?? fascia.id).replace(/[^a-zA-Z0-9_-]/g, "-")
+  const valore = num(fascia.valore, fascia.id === "whr" || fascia.id === "whtr" ? 2 : 1, locale)
+  const z = boundsCinqueZone(fascia)
+  if (!z) {
     const nessunRif =
-      locale === "en"
-        ? "no reference for this patient"
-        : "nessun riferimento per questo paziente";
+      locale === "en" ? "no reference for this patient" : "nessun riferimento per questo paziente"
     const nessunaFascia =
       locale === "en"
         ? "No published range for this sex or age"
-        : "Nessuna fascia pubblicata per sesso o età";
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" role="img" aria-labelledby="${id}-t" style="width:100%;height:auto;display:block"><title id="${id}-t">${esc(titolo)} ${esc(valore)} — ${nessunRif}</title><text x="0" y="16" fill="#0f172a" font-size="12" font-weight="800">${esc(titolo)}</text><text x="0" y="36" fill="#334155" font-size="18" font-weight="800">${esc(valore)}</text><text x="0" y="52" fill="#64748b" font-size="10">${nessunaFascia}</text></svg>`;
+        : "Nessuna fascia pubblicata per sesso o età"
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" role="img" aria-labelledby="${id}-t" style="width:100%;height:auto;display:block"><title id="${id}-t">${esc(titolo)} ${esc(valore)} — ${nessunRif}</title><text x="0" y="16" fill="#0f172a" font-size="12" font-weight="800">${esc(titolo)}</text><text x="0" y="36" fill="#334155" font-size="18" font-weight="800">${esc(valore)}</text><text x="0" y="52" fill="#64748b" font-size="10">${nessunaFascia}</text></svg>`
   }
-  const span = Math.max(fascia.high * 1.4 - 0, 0.01);
-  const xTrack = 8;
-  const trackW = w - 16;
-  const xVal = xTrack + Math.max(0, Math.min(1, fascia.valore / span)) * trackW;
-  const xLow = xTrack + (fascia.low / span) * trackW;
-  const xHigh = xTrack + (fascia.high / span) * trackW;
-  const zona = `<rect x="${xLow}" y="22" width="${Math.max(2, xHigh - xLow)}" height="10" rx="5" fill="#99f6e4"/>`;
+  const xTrack = 8
+  const trackW = w - 16
+  const yBar = 28
+  const barH = 12
+  const segs: Array<{ a: number; b: number; fill: string }> = [
+    { a: z.redLo[0], b: z.redLo[1], fill: "#b91c1c" },
+    { a: z.orangeLo[0], b: z.orangeLo[1], fill: "#ea580c" },
+    { a: z.green[0], b: z.green[1], fill: "#0f766e" },
+    { a: z.orangeHi[0], b: z.orangeHi[1], fill: "#ea580c" },
+    { a: z.redHi[0], b: z.redHi[1], fill: "#b91c1c" },
+  ]
+  const rects = segs
+    .filter((s) => s.b > s.a + 1e-6)
+    .map((s) => {
+      const x = xOnScale(s.a, z, xTrack, trackW)
+      const x2 = xOnScale(s.b, z, xTrack, trackW)
+      return `<rect x="${x}" y="${yBar}" width="${Math.max(1, x2 - x)}" height="${barH}" fill="${s.fill}"/>`
+    })
+    .join("")
+  const xv = xOnScale(fascia.valore, z, xTrack, trackW)
+  const wedge = `<polygon points="${xv - 7},${yBar - 4} ${xv + 7},${yBar - 4} ${xv},${yBar + 10}" fill="#0f172a" stroke="#fff" stroke-width="1.2"/>`
   const piede = [
     fascia.etichettaFascia ? locGaugeText(fascia.etichettaFascia, locale) : "",
     fascia.fonte ? locGaugeText(fascia.fonte, locale) : "",
   ]
     .filter(Boolean)
-    .join(" · ");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" role="img" aria-labelledby="${id}-t ${id}-d" style="width:100%;height:auto;display:block"><title id="${id}-t">${esc(titolo)} ${esc(valore)}</title><desc id="${id}-d">${esc(piede)}</desc><text x="8" y="14" fill="#0f172a" font-size="11" font-weight="800">${esc(titolo)}</text><text x="${w - 8}" y="14" text-anchor="end" fill="${colore}" font-size="14" font-weight="850">${esc(valore)}</text><rect x="${xTrack}" y="24" width="${trackW}" height="6" rx="3" fill="#e2e8f0"/>${zona}<circle cx="${xVal}" cy="27" r="6" fill="${colore}" stroke="#fff" stroke-width="2"/><text x="8" y="50" fill="#64748b" font-size="9">${esc(piede)}</text></svg>`;
+    .join(" · ")
+  const tono = tonoCinqueZone(fascia.valore, z)
+  const tonoIt: Record<typeof tono, string> = {
+    "rosso-inf": "rosso inferiore",
+    "arancio-inf": "arancione inferiore",
+    verde: "verde (in range)",
+    "arancio-sup": "arancione superiore",
+    "rosso-sup": "rosso superiore",
+  }
+  const tonoEn: Record<typeof tono, string> = {
+    "rosso-inf": "lower red",
+    "arancio-inf": "lower amber",
+    verde: "green (in range)",
+    "arancio-sup": "upper amber",
+    "rosso-sup": "upper red",
+  }
+  const tonoLab = locale === "en" ? tonoEn[tono] : tonoIt[tono]
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" role="img" aria-labelledby="${id}-t ${id}-d" style="width:100%;height:auto;display:block"><title id="${id}-t">${esc(titolo)} ${esc(valore)}</title><desc id="${id}-d">${esc(piede)} · ${tonoLab}</desc><text x="8" y="14" fill="#0f172a" font-size="11" font-weight="800">${esc(titolo)}</text><text x="${w - 8}" y="14" text-anchor="end" fill="#0f172a" font-size="14" font-weight="850">${esc(valore)} · ${tonoLab}</text><rect x="${xTrack}" y="${yBar}" width="${trackW}" height="${barH}" rx="2" fill="#e2e8f0"/>${rects}${wedge}<text x="8" y="58" fill="#64748b" font-size="9">${esc(piede)}</text></svg>`
 }
 
 /** Quattro gauge in un blocco HTML: stesso ordine su Web, PWA ed export. */

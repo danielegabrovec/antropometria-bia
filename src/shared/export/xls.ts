@@ -126,7 +126,7 @@ export function parseAnagraficheXls(xml: string): { doctors: DoctorProfile[]; pa
     normalizePatient({
       nome: r[0],
       cognome: r[1],
-      sex: r[2] === 'M' || r[2] === 'F' || r[2] === 'Altro' ? r[2] : null,
+      sex: r[2],
       birthDate: r[3] || null,
       fiscalCode: r[4],
       phone: r[5],

@@ -7,10 +7,16 @@ const MODELS: Record<BodyModelVariant, string> = {
   female: femaleImg
 }
 
+const PIN_COLOR = {
+  pliche: '#a78bfa',
+  circonferenze: '#2dd4bf',
+  diametri: '#d4a574'
+} as const
+
 export interface PinFigura {
   key: string
   label: string
-  categoria: 'circonferenze' | 'pliche'
+  categoria: 'circonferenze' | 'pliche' | 'diametri'
   valorizzato?: boolean
   richiesta?: boolean
   previous?: boolean
@@ -80,27 +86,39 @@ export default function FiguraCorpo({
       {pins.map((pin) => {
         const ancora = anchors[pin.key]
         if (!ancora || !suQuestaVista(ancora.nx)) return null
-        const colore = pin.categoria === 'pliche' ? '#a78bfa' : '#2dd4bf'
-        const selected = selectedKey === pin.key
+        const colore = PIN_COLOR[pin.categoria]
+        const selected = selectedKey === pin.key && !pin.previous
         return (
           <button
             key={pin.key + (pin.previous ? '-prev' : '')}
             type="button"
             data-mappa-pin={pin.key}
             title={pin.label}
-            aria-label={`${pin.label}: vai al campo`}
+            aria-label={`${pin.label}: vai al campo in tabella`}
             onClick={() => onPinClick?.(pin.key)}
-            className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
             style={{
               left: `${nxLocale(ancora.nx) * 100}%`,
               top: `${ancora.ny * 100}%`,
+              width: selected ? 16 : 14,
+              height: selected ? 16 : 14,
               backgroundColor: pin.previous ? 'transparent' : pin.valorizzato === false ? '#0b1220' : colore,
               borderColor: pin.previous ? '#93a0b5' : selected ? '#d4a574' : pin.valorizzato === false ? colore : '#e8edf5',
               borderStyle: pin.previous ? 'dashed' : 'solid',
-              boxShadow: pin.richiesta && !pin.previous ? `0 0 0 3px ${colore}44` : undefined,
-              zIndex: selected ? 3 : 1
+              boxShadow: selected
+                ? '0 0 0 3px rgba(212,165,116,0.45)'
+                : pin.richiesta && !pin.previous
+                  ? `0 0 0 3px ${colore}44`
+                  : undefined,
+              zIndex: selected ? 4 : 1
             }}
-          />
+          >
+            {selected ? (
+              <span className="pin-label" style={{ color: '#d4a574' }}>
+                {pin.label}
+              </span>
+            ) : null}
+          </button>
         )
       })}
       {etichetta ? (

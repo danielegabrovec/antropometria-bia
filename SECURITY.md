@@ -1,6 +1,8 @@
 # Sicurezza
 
-Antropometria BIA è un’app desktop **offline**. Non elabora pagamenti, non ha account e non espone un server. I profili restano in `%APPDATA%\antropometria-bia`.
+Antropometria BIA è un’app desktop **offline**. Non elabora pagamenti, non ha account e non espone un server. I profili restano in `%APPDATA%\Antropometria BIA\antropometria-bia`; ogni scrittura crea una copia locale `.bak` recuperabile automaticamente.
+
+I file di libreria importati sono validati, limitati a 50 MB e non possono scegliere percorsi interni dell’app. I collegamenti esterni sono limitati al repository ufficiale e all’indirizzo di supporto.
 
 ## Segnalare una vulnerabilità
 
@@ -15,3 +17,7 @@ Fuori ambito: «la percentuale di massa grassa non coincide con il mio AKERN» (
 ## Uso clinico
 
 Il software **non è un dispositivo medico**. Nessuna patch di sicurezza autorizza un uso diagnostico o prescrittivo.
+
+## Integrità dei rilasci
+
+Ogni release pubblica include l’installer, il relativo file `.sha256` e un’attestazione GitHub della provenienza della build. L’installer 1.2.0 non è firmato Authenticode: verificare sempre checksum e provenienza prima dell’esecuzione.

@@ -17,26 +17,28 @@ Strumento **locale** di antropometria e BIA/BIVA per la composizione corporea, s
 ## Cosa fa
 
 - **Cartelle dottore** — all’avvio un wizard crea il profilo (studio condiviso o cartella personale). Nello studio i pazienti sono in comune e su ogni visita compare chi ha misurato; le cartelle personali restano isolate.
-- **Pazienti** — anagrafica completa, ricerca, crea/modifica/elimina. In Misura: cerca un paziente già presente o creane uno nuovo.
-- **Antropometria** — pliche Jackson-Pollock 3/4/7 e Durnin-Womersley, Siri/Brozek, circonferenze, BMI, WHR, WHtR, artometria, Heymsfield, Heath-Carter, omini fotorealistici uomo/donna fronte e retro con pin e heat (senza sesso M/F la mappa resta spenta).
-- **BIA/BIVA** — profilo AKERN 101 (R + Xc, 50 kHz total-body): Sun, Janssen, Sergi, vettore R/H × Xc/H con ellissi Campa. BCM solo se lo inserisci dallo strumento.
-- **Statistiche** — andamenti anche con una visita, Δ unico (precedente o prima), pendenza, Bland-Altman pliche vs BIA, nome dell’operatore.
-- **Export / import** — cartella intera in JSON, HTML, PDF, Stampa. Visita in HTML, PDF, Stampa, JSON. Anagrafiche in XLS, PDF, HTML, JSON, DOCX, Stampa; import anagrafiche da JSON e XLS. Tutto locale: nessun account, nessun cloud.
+- **Pazienti** — anagrafica completa (sesso solo Maschio/Femmina), ricerca, crea/modifica/elimina. In Misura: cerca un paziente già presente o creane uno nuovo.
+- **Misura** — tabella + pin sull’omino, solo i siti del metodo/preset scelto; peso e altezza su una riga, R/Z e Xc sulla successiva; formule (pliche, grasso, BSA, peso teorico, BMR, LAF) da menu a tendina. Le visite salvate si riaprono, duplicano, eliminano.
+- **Analisi** — composizione da pliche e da BIA, fasce di normalità a **cinque zone** (verde / arancio inf. e sup. / rosso inf. e sup.) con **cuneo** sul valore (massa grassa Gallagher, BMI OMS, WHR, WHtR), confronto formule BMR × LAF LARN 2024, Bland-Altman.
+- **BIVA** — piano R/H × Xc/H con assi numerati, ellissi 50 / 75 / 95 % riempite, baricentro della coorte, aree Piccoli (atletica, magra, adiposa, ridotta cellularità). La visita in esame è visibile e cliccabile.
+- **Andamenti** — grafici e tabella anche con una visita; clic sulla data apre quella visita in Misura, Analisi o BIVA.
+- **Export** — **questa visita** (HTML/PDF/Stampa/JSON, con gauge e grafico BIVA) e **andamenti** del paziente, oltre a cartella intera e anagrafiche (JSON, HTML, PDF, XLS, DOCX). Tutto locale: nessun account, nessun cloud.
 
 ## Installazione (Windows)
 
 1. Apri la pagina [Releases](https://github.com/danielegabrovec/antropometria-bia/releases).
-2. Scarica `Antropometria-BIA-Setup-1.1.0.exe` (installer NSIS, 64 bit).
-3. Esegui il file (lingua italiana, si può scegliere la cartella).
-4. All’avvio accetta l’avvertenza e crea il profilo dottore.
+2. Scarica `Antropometria-BIA-Setup-1.2.0.exe` (installer NSIS, 64 bit).
+3. Scarica anche `Antropometria-BIA-Setup-1.2.0.exe.sha256` e verifica l’integrità con `Get-FileHash .\Antropometria-BIA-Setup-1.2.0.exe -Algorithm SHA256`.
+4. Esegui il file (lingua italiana, si può scegliere la cartella).
+5. All’avvio accetta l’avvertenza e crea il profilo dottore.
 
 ### SmartScreen
 
-L’installer **non è firmato con un certificato Authenticode a pagamento**. Windows può mostrare «Windows ha protetto il PC». Scegli **Ulteriori informazioni** → **Esegui comunque**.
+L’installer **non è ancora firmato con un certificato Authenticode**. Windows può mostrare «Windows ha protetto il PC». Prosegui solo se il file arriva dalla release ufficiale, il checksum SHA-256 coincide e il repository mostra l’attestazione di provenienza GitHub della build.
 
 ### Disinstallazione
 
-Impostazioni Windows → App → Antropometria BIA → Disinstalla. I JSON restano in `%APPDATA%\antropometria-bia` finché non li cancelli a mano.
+Impostazioni Windows → App → Antropometria BIA → Disinstalla. Per evitare perdite accidentali, i JSON restano in `%APPDATA%\Antropometria BIA\antropometria-bia` finché non li cancelli a mano.
 
 Requisiti: Windows 10 o 11, 64 bit.
 
@@ -59,20 +61,28 @@ npm run dev
 | `npm run build` | Bundle in `out/` |
 | `npm run dist` | Bundle + installer NSIS in `release/` |
 
+> Prima di `npm run dist` fermare `npm run dev`: i due processi non convivono sullo stesso bundle.
+
 ## Layout
 
-Rail a sinistra (come Kinetica, suite sorella): Misura, Analisi, BIVA, Andamenti, Pazienti, Dottori, Archivio, Report, Teoria, Opzioni, Info. In **Misura**: cerca/crea paziente | omini fronte/retro | ispettore del pin e blocco BIA. Peso e altezza si scrivono una volta: antropometria e BIA non si fondono sui KPI.
+Rail a sinistra: Misura, Analisi, BIVA, Andamenti, Pazienti, Dottori, Archivio, Report, Teoria, Opzioni, Info.
+
+Su Analisi, BIVA, Andamenti e Report la barra **Visita in esame** mostra paziente, data, peso e i pulsanti Misura / Analisi / BIVA su ogni visita salvata.
 
 ## Motore
 
-Porte da `@nutriva/clinical` (Sun 2003, Janssen 2000, Sergi, Jackson-Pollock, Durnin-Womersley, Gallagher 2000, BIVA Campa). Fuori dalla finestra di età il numero può uscire con riserva. Sesso «Altro» non viene convertito in maschio.
+Porte da `@nutriva/clinical` (Sun 2003, Janssen 2000, Sergi, Jackson-Pollock, Durnin-Womersley, Gallagher 2000, BIVA Campa). Fuori dalla finestra di età il numero può uscire con riserva. Sesso «Altro» in import non viene convertito in maschio. BCM solo se inserito dallo strumento, mai sintetizzato.
 
-## Autore e diritti
+## Autore e licenza
 
 **Antropometria BIA è stata creata da Daniele Gabrovec.**
 
-© 2026 Daniele Gabrovec. Tutti i diritti riservati.
-
-Vietata la riproduzione, anche parziale, la copia, la modifica, la distribuzione e qualsiasi uso non autorizzato, senza il consenso scritto dell’autore.
+© 2026 Daniele Gabrovec. Il software è distribuito con [licenza MIT](LICENSE): uso, copia, modifica e redistribuzione sono consentiti mantenendo il copyright e il testo della licenza.
 
 Nessuna garanzia. Non è un dispositivo medico.
+
+## Documentazione della release
+
+- [Changelog](CHANGELOG.md)
+- [Evidenze di collaudo 1.2.0](docs/QA-1.2.0.md)
+- [Politica di sicurezza](SECURITY.md)

@@ -23,9 +23,9 @@ export interface AntropometriaBiaApi {
   }>
   printHtml: (html: string) => Promise<{ ok: boolean }>
   pdfHtml: (html: string, defaultName: string) => Promise<{ ok: boolean; path?: string }>
-  print: () => Promise<{ ok: boolean }>
-  pdf: (defaultName: string) => Promise<{ ok: boolean; path?: string }>
   openPath: (p: string) => Promise<void>
+  onBeforeClose: (callback: () => void | Promise<void>) => () => void
+  closeReady: () => void
 }
 
 declare global {

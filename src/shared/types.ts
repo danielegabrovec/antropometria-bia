@@ -1,4 +1,4 @@
-export type Sex = 'M' | 'F' | 'Altro'
+export type Sex = 'M' | 'F'
 export type ClinicalSex = 'M' | 'F' | null
 export type WorkspaceKind = 'studio' | 'solo'
 

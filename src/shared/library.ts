@@ -5,6 +5,7 @@ import type {
   DoctorProfile,
   LibraryFile,
   PatientProfile,
+  Sex,
   Visit,
   WorkspaceDraft,
   WorkspaceFile,
@@ -29,6 +30,45 @@ export function uid(): string {
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+function positiveNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+function isoDate(value: unknown, fallback: string): string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback
+  const date = new Date(`${value}T00:00:00Z`)
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? fallback : value
+}
+
+function enumValue<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && allowed.includes(value as T) ? (value as T) : fallback
+}
+
+function validWorkspaceMeta(raw: unknown): WorkspaceMeta | null {
+  if (!raw || typeof raw !== 'object') return null
+  const item = raw as Record<string, unknown>
+  if (typeof item.id !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(item.id)) return null
+  if (typeof item.name !== 'string' || item.name.trim().length === 0 || item.name.length > 160) return null
+  if (item.kind !== 'studio' && item.kind !== 'solo') return null
+  return { id: item.id, name: item.name.trim(), kind: item.kind }
+}
+
+export function parseSex(raw: unknown): Sex | null {
+  if (raw === 'M' || raw === 'F') return raw
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+  if (s === 'm' || s === 'maschio' || s === 'maschile' || s === 'uomo' || s === 'male') return 'M'
+  if (s === 'f' || s === 'femmina' || s === 'femminile' || s === 'donna' || s === 'female') return 'F'
+  return null
+}
+
+export function sexLabel(sex: Sex | null | undefined): string {
+  if (sex === 'M') return 'Maschio'
+  if (sex === 'F') return 'Femmina'
+  return 'sesso —'
 }
 
 export function displayName(nome: string, cognome: string, fallback = 'Senza nome'): string {
@@ -58,7 +98,7 @@ export function emptyDoctor(partial: Partial<DoctorProfile> = {}): DoctorProfile
     titolo: partial.titolo ?? 'Dott.',
     nome: partial.nome ?? '',
     cognome: partial.cognome ?? '',
-    sex: partial.sex ?? null,
+    sex: parseSex(partial.sex),
     birthDate: partial.birthDate ?? null,
     fiscalCode: partial.fiscalCode ?? '',
     vatNumber: partial.vatNumber ?? '',
@@ -88,7 +128,7 @@ export function emptyPatient(partial: Partial<PatientProfile> = {}): PatientProf
     nome,
     cognome,
     alias,
-    sex: partial.sex ?? null,
+    sex: parseSex(partial.sex),
     birthDate: partial.birthDate ?? null,
     fiscalCode: partial.fiscalCode ?? '',
     phone: partial.phone ?? '',
@@ -161,7 +201,7 @@ export function normalizePatient(raw: unknown): PatientProfile | null {
       nome,
       cognome,
       alias,
-      sex: o.sex === 'M' || o.sex === 'F' || o.sex === 'Altro' ? o.sex : null,
+      sex: parseSex(o.sex),
       birthDate: typeof o.birthDate === 'string' ? o.birthDate : null,
       fiscalCode: typeof o.fiscalCode === 'string' ? o.fiscalCode : '',
       phone: typeof o.phone === 'string' ? o.phone : '',
@@ -176,18 +216,27 @@ export function normalizePatient(raw: unknown): PatientProfile | null {
 export function normalizeDoctor(raw: unknown): DoctorProfile | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
+  let orderName = typeof o.orderName === 'string' ? o.orderName.trim() : ''
+  let orderNumber = typeof o.orderNumber === 'string' ? o.orderNumber.trim() : ''
+  if (orderName && !orderNumber) {
+    const legacyOrder = orderName.match(/^(.*?)(?:\s+n\.?\s*)?((?:[A-Z]{2,}[_-][A-Z0-9_-]+)|(?:\d[A-Z0-9._/-]*))$/i)
+    if (legacyOrder?.[1] && legacyOrder[2]) {
+      orderName = legacyOrder[1].trim()
+      orderNumber = legacyOrder[2].trim()
+    }
+  }
   return emptyDoctor({
     id: typeof o.id === 'string' ? o.id : uid(),
     titolo: typeof o.titolo === 'string' ? o.titolo : 'Dott.',
     nome: typeof o.nome === 'string' ? o.nome : '',
     cognome: typeof o.cognome === 'string' ? o.cognome : '',
-    sex: o.sex === 'M' || o.sex === 'F' || o.sex === 'Altro' ? o.sex : null,
+    sex: parseSex(o.sex),
     birthDate: typeof o.birthDate === 'string' ? o.birthDate : null,
     fiscalCode: typeof o.fiscalCode === 'string' ? o.fiscalCode : '',
     vatNumber: typeof o.vatNumber === 'string' ? o.vatNumber : '',
     qualification: typeof o.qualification === 'string' ? o.qualification : typeof o.qualifica === 'string' ? o.qualifica : '',
-    orderName: typeof o.orderName === 'string' ? o.orderName : '',
-    orderNumber: typeof o.orderNumber === 'string' ? o.orderNumber : '',
+    orderName,
+    orderNumber,
     structure: typeof o.structure === 'string' ? o.structure : '',
     address: typeof o.address === 'string' ? o.address : '',
     zip: typeof o.zip === 'string' ? o.zip : '',
@@ -206,27 +255,47 @@ export function normalizeVisit(raw: unknown): Visit | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   if (typeof o.patientId !== 'string') return null
-  const bia = o.bia && typeof o.bia === 'object' ? { ...emptyBia(), ...(o.bia as object) } : emptyBia()
+  const rawBia = o.bia && typeof o.bia === 'object' ? (o.bia as Record<string, unknown>) : {}
+  const bia = {
+    ...emptyBia(),
+    inputKind: rawBia.inputKind === 'Z_XC' ? ('Z_XC' as const) : ('R_XC' as const),
+    resistanceOhm: positiveNumber(rawBia.resistanceOhm),
+    impedanceOhm: positiveNumber(rawBia.impedanceOhm),
+    reactanceOhm: positiveNumber(rawBia.reactanceOhm),
+    bivaProfileId: typeof rawBia.bivaProfileId === 'string' && rawBia.bivaProfileId.length <= 120 ? rawBia.bivaProfileId : null,
+    deviceProfileId: rawBia.deviceProfileId === 'altro' ? ('altro' as const) : ('akern-101' as const),
+    deviceBcmKg: positiveNumber(rawBia.deviceBcmKg),
+    deviceEcmKg: positiveNumber(rawBia.deviceEcmKg),
+    deviceNaK: positiveNumber(rawBia.deviceNaK)
+  }
+  const measures = Object.fromEntries(
+    Object.entries(o.measures && typeof o.measures === 'object' ? (o.measures as Record<string, unknown>) : {})
+      .filter(([key, value]) => /^[A-Za-z0-9_-]{1,80}$/.test(key) && (value == null || positiveNumber(value) != null))
+      .slice(0, 200)
+      .map(([key, value]) => [key, value == null ? null : positiveNumber(value)])
+  )
   return {
     id: typeof o.id === 'string' ? o.id : uid(),
     patientId: o.patientId,
     operatorDoctorId: typeof o.operatorDoctorId === 'string' ? o.operatorDoctorId : null,
     name: typeof o.name === 'string' ? o.name : 'Visita',
-    date: typeof o.date === 'string' ? o.date : today(),
+    date: isoDate(o.date, today()),
     createdAt: typeof o.createdAt === 'string' ? o.createdAt : new Date().toISOString(),
     updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : new Date().toISOString(),
-    weightKg: typeof o.weightKg === 'number' ? o.weightKg : null,
-    heightCm: typeof o.heightCm === 'number' ? o.heightCm : null,
+    weightKg: positiveNumber(o.weightKg),
+    heightCm: positiveNumber(o.heightCm),
     clinicalSex: o.clinicalSex === 'M' || o.clinicalSex === 'F' ? o.clinicalSex : null,
-    protocolPreset: (o.protocolPreset as Visit['protocolPreset']) || 'essenziale',
-    eqDensitaPliche: (o.eqDensitaPliche as Visit['eqDensitaPliche']) || 'JacksonPollock7',
-    eqMassaGrassa: (o.eqMassaGrassa as Visit['eqMassaGrassa']) || 'Siri',
-    eqSuperficie: (o.eqSuperficie as Visit['eqSuperficie']) || 'DuBois',
-    pesoTeorico: (o.pesoTeorico as Visit['pesoTeorico']) || 'BMI',
-    formulaBmr: (o.formulaBmr as Visit['formulaBmr']) || 'Cunningham',
-    laf: typeof o.laf === 'number' ? o.laf : 1.55,
-    measures: o.measures && typeof o.measures === 'object' ? { ...(o.measures as Visit['measures']) } : {},
-    enabledGirths: Array.isArray(o.enabledGirths) ? (o.enabledGirths as string[]) : [],
+    protocolPreset: enumValue(o.protocolPreset, ['essenziale', 'formula', 'isak', 'avanzato'] as const, 'essenziale'),
+    eqDensitaPliche: enumValue(o.eqDensitaPliche, ['JacksonPollock3', 'JacksonPollock4', 'JacksonPollock7', 'DurninWomersley'] as const, 'JacksonPollock7'),
+    eqMassaGrassa: enumValue(o.eqMassaGrassa, ['Siri', 'Brozek'] as const, 'Siri'),
+    eqSuperficie: enumValue(o.eqSuperficie, ['DuBois', 'Mosteller'] as const, 'DuBois'),
+    pesoTeorico: enumValue(o.pesoTeorico, ['BMI', 'Lorenz', 'Broca', 'Devine', 'Robinson', 'Hamwi'] as const, 'BMI'),
+    formulaBmr: enumValue(o.formulaBmr, ['HarrisBenedict', 'MifflinStJeor', 'KatchMcArdle', 'Cunningham'] as const, 'Cunningham'),
+    laf: typeof o.laf === 'number' && Number.isFinite(o.laf) && o.laf >= 1 && o.laf <= 3 ? o.laf : 1.55,
+    measures,
+    enabledGirths: Array.isArray(o.enabledGirths)
+      ? [...new Set(o.enabledGirths.filter((value): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value)))].slice(0, 100)
+      : [],
     bia,
     notes: typeof o.notes === 'string' ? o.notes : ''
   }
@@ -236,12 +305,17 @@ export function parseIndex(raw: unknown): AppIndex | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   if (o.kind !== INDEX_KIND) return null
-  if (!Array.isArray(o.workspaces)) return null
+  if (o.version !== INDEX_VERSION || !Array.isArray(o.workspaces) || o.workspaces.length > 200) return null
+  const workspaces = o.workspaces.map(validWorkspaceMeta)
+  if (workspaces.some((workspace) => workspace == null)) return null
+  const activeWorkspaceId = typeof o.activeWorkspaceId === 'string' && workspaces.some((workspace) => workspace?.id === o.activeWorkspaceId)
+    ? o.activeWorkspaceId
+    : workspaces[0]?.id ?? null
   return {
     kind: INDEX_KIND,
     version: INDEX_VERSION,
-    workspaces: o.workspaces as WorkspaceMeta[],
-    activeWorkspaceId: typeof o.activeWorkspaceId === 'string' ? o.activeWorkspaceId : null
+    workspaces: workspaces as WorkspaceMeta[],
+    activeWorkspaceId
   }
 }
 
@@ -249,8 +323,10 @@ export function parseWorkspace(raw: unknown): WorkspaceFile | null {
   if (!raw || typeof raw !== 'object') return null
   const o = raw as Record<string, unknown>
   if (o.kind === WORKSPACE_KIND) {
-    const ws = o.workspace as WorkspaceMeta | undefined
-    if (!ws?.id) return null
+    if (o.version !== WORKSPACE_VERSION) return null
+    const ws = validWorkspaceMeta(o.workspace)
+    if (!ws) return null
+    if ((Array.isArray(o.doctors) && o.doctors.length > 100) || (Array.isArray(o.patients) && o.patients.length > 10_000) || (Array.isArray(o.visits) && o.visits.length > 100_000)) return null
     const doctors = Array.isArray(o.doctors) ? o.doctors.map(normalizeDoctor).filter((d): d is DoctorProfile => d != null) : []
     const patients = Array.isArray(o.patients) ? o.patients.map(normalizePatient).filter((p): p is PatientProfile => p != null) : []
     const visits = Array.isArray(o.visits) ? o.visits.map(normalizeVisit).filter((v): v is Visit => v != null) : []

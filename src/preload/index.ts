@@ -14,7 +14,11 @@ contextBridge.exposeInMainWorld('antropometriaBia', {
     ipcRenderer.invoke('abia:import-file', filters),
   printHtml: (html: string) => ipcRenderer.invoke('abia:print-html', html),
   pdfHtml: (html: string, defaultName: string) => ipcRenderer.invoke('abia:pdf-html', html, defaultName),
-  print: () => ipcRenderer.invoke('abia:print'),
-  pdf: (defaultName: string) => ipcRenderer.invoke('abia:pdf', defaultName),
-  openPath: (p: string) => ipcRenderer.invoke('abia:open-path', p)
+  openPath: (p: string) => ipcRenderer.invoke('abia:open-path', p),
+  onBeforeClose: (callback: () => void | Promise<void>) => {
+    const listener = () => void callback()
+    ipcRenderer.on('abia:before-close', listener)
+    return () => ipcRenderer.removeListener('abia:before-close', listener)
+  },
+  closeReady: () => ipcRenderer.send('abia:close-ready')
 })

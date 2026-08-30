@@ -42,9 +42,19 @@ export function CommandPalette() {
   if (!open) return null
   return (
     <div className="overlay" onClick={() => setPalette(false)}>
-      <div className="palette" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="palette"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ricerca rapida"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setPalette(false)
+        }}
+      >
         <input
           autoFocus
+          aria-label="Cerca viste, pazienti, dottori o misure"
           placeholder="Vai a una vista, un paziente, un dottore o un sito…"
           value={q}
           onChange={(e) => setQ(e.target.value)}

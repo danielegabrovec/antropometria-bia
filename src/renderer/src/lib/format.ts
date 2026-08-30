@@ -15,3 +15,8 @@ export function parseIt(raw: string): number | null {
   const n = Number(t)
   return Number.isFinite(n) ? n : null
 }
+
+export function parsePositive(raw: string): number | null {
+  const value = parseIt(raw)
+  return value != null && value > 0 ? value : null
+}

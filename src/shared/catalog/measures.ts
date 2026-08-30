@@ -46,7 +46,7 @@ export const MEASURE_BY_KEY = Object.fromEntries(MEASURES.map((m) => [m.key, m])
   MeasureDef
 >
 
-export const ESSENTIAL_GIRTHS = ['vita', 'fianchi', 'braccio'] as const
+export const ESSENTIAL_GIRTHS = ['vita', 'addome', 'fianchi', 'braccio'] as const
 export const ISAK_GIRTHS = [
   'torace',
   'vita',
@@ -70,4 +70,45 @@ export function defaultGirths(preset: string): string[] {
   if (preset === 'avanzato')
     return MEASURES.filter((m) => m.category === 'circonferenze').map((m) => m.key)
   return [...ESSENTIAL_GIRTHS]
+}
+
+/** Circonferenze del preset più eventuali siti già salvati (visite vecchie senza addome restano visibili). */
+export function effectiveGirths(protocolPreset: string, enabledGirths: readonly string[]): string[] {
+  const want = new Set([...defaultGirths(protocolPreset), ...enabledGirths])
+  return MEASURES.filter((m) => m.category === 'circonferenze' && want.has(m.key)).map((m) => m.key)
+}
+
+/**
+ * Siti da mostrare in tabella e sull'omino per il metodo attivo
+ * (pliche della formula di densità + circonferenze del preset + diametri ISAK/avanzato).
+ * I valori già in `visit.measures` non si toccano: un sito nascosto resta salvato.
+ */
+export function visibleMeasureKeys(
+  protocolPreset: string,
+  enabledGirths: readonly string[],
+  skinfoldKeys: readonly string[]
+): string[] {
+  const want = new Set<string>(effectiveGirths(protocolPreset, enabledGirths))
+  for (const k of skinfoldKeys) {
+    if (MEASURE_BY_KEY[k]?.category === 'pliche') want.add(k)
+  }
+  if (protocolPreset === 'isak' || protocolPreset === 'avanzato') {
+    for (const m of MEASURES) {
+      if (m.category === 'diametri') want.add(m.key)
+    }
+  }
+  return MEASURES.map((m) => m.key).filter((k) => want.has(k))
+}
+
+export function countHiddenStoredMeasures(
+  measures: Record<string, number | null | undefined>,
+  visibleKeys: readonly string[]
+): number {
+  const vis = new Set(visibleKeys)
+  let n = 0
+  for (const m of MEASURES) {
+    const v = measures[m.key]
+    if (v != null && Number.isFinite(v) && !vis.has(m.key)) n += 1
+  }
+  return n
 }

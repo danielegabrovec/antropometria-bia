@@ -1,6 +1,6 @@
 {
   "name": "antropometria-bia",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Strumento locale di antropometria e BIA/BIVA per la composizione corporea",
   "author": {
@@ -42,7 +42,7 @@
     "@fontsource/ibm-plex-mono": "^5.2.5",
     "@fontsource/ibm-plex-sans": "^5.2.5",
     "@fontsource/source-serif-4": "^5.2.5",
-    "echarts": "^5.6.0",
+    "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.2",
     "lucide-react": "^0.511.0",
     "react": "^19.1.0",
@@ -55,7 +55,7 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^4.5.0",
-    "electron": "^36.3.1",
+    "electron": "^44.0.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^3.1.0",
     "tailwindcss": "^4.1.8",

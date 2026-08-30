@@ -694,10 +694,32 @@ export const BIVA_ZONE_LABELS: Record<BivaResult["zone"], string> = {
   outside_95: "Oltre il 95%",
 };
 
+/** Dominio del piano RXc: ellissi + punti, stesso padding del grafico Nutriva (doctor/patient/export). */
+export function bivaPlotRange(
+  result: BivaResult,
+  trail: Array<{ rH: number; xcH: number }> = [],
+): { rMin: number; rMax: number; xMin: number; xMax: number } {
+  const pts = [
+    ...result.ellipses.flatMap((e) => e.points),
+    { rH: result.rH, xcH: result.xcH },
+    ...trail,
+  ];
+  const rawXMin = Math.min(...pts.map((p) => p.rH));
+  const rawXMax = Math.max(...pts.map((p) => p.rH));
+  const rawYMin = Math.min(...pts.map((p) => p.xcH));
+  const rawYMax = Math.max(...pts.map((p) => p.xcH));
+  const xPad = Math.max((rawXMax - rawXMin) * 0.1, 12);
+  const yPad = Math.max((rawYMax - rawYMin) * 0.14, 3);
+  return {
+    rMin: rawXMin - xPad,
+    rMax: rawXMax + xPad,
+    xMin: rawYMin - yPad,
+    xMax: rawYMax + yPad,
+  };
+}
+
 /**
- * Tacche «belle» per gli assi dei grafici BIA Vector: passi 1/2/5·10^k dentro
- * [min, max]. Senza scala numerica il grafico mostrava solo etichette R/H e
- * Xc/H: il punto non era leggibile in Ω/m e il documento non era verificabile.
+ * Tacche «belle» per gli assi dei grafici BIVA: passi 1/2/5·10^k dentro [min, max].
  */
 export function bivaAxisTicks(
   min: number,

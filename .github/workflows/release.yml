@@ -7,27 +7,46 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run typecheck
       - run: npm test
       - run: npm run dist
-      - uses: actions/upload-artifact@v4
+      - name: Genera checksum SHA-256
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -LiteralPath release -Filter 'Antropometria-BIA-Setup-*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'Installer non trovato' }
+          $hash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content -LiteralPath "$($installer.FullName).sha256" -Encoding ascii
+      - name: Attesta provenienza installer
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: release/Antropometria-BIA-Setup-*.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: antropometria-bia-windows-setup
-          path: release/Antropometria-BIA-Setup-*.exe
+          path: |
+            release/Antropometria-BIA-Setup-*.exe
+            release/Antropometria-BIA-Setup-*.exe.sha256
       - name: Pubblica sulla release GitHub
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          files: release/Antropometria-BIA-Setup-*.exe
+          files: |
+            release/Antropometria-BIA-Setup-*.exe
+            release/Antropometria-BIA-Setup-*.exe.sha256
           generate_release_notes: true
           draft: false

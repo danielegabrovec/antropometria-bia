@@ -133,20 +133,120 @@ export function calcolaBmrConMetodo(input: {
   return { bmr, ffMUsato: ffmKg, fallbackFfm: false };
 }
 
+export type LafLivello = "sedentario" | "pocoattivo" | "attivo" | "moltoattivo";
+
+/** LAF LARN 2024 — stessi coefficienti di Nutriva Web. */
+export const LAF_LARN_2024: Record<LafLivello, number> = {
+  sedentario: 1.4,
+  pocoattivo: 1.55,
+  attivo: 1.7,
+  moltoattivo: 1.9,
+};
+
 /**
- * Fattori di attività (LAF) standard WHO/ACSM per il calcolo del TDEE.
+ * Fattori di attività per il TDEE: LARN 2024 in testa (come Nutriva Web),
+ * poi i coefficienti ACSM/WHO extra che non coincidono.
  */
-export const ATTIVITA_FISICA: ReadonlyArray<{
+export const LIVELLI_DISPENDIO: ReadonlyArray<{
   value: number;
+  livello: LafLivello | null;
   label: string;
   description: string;
+  fonte: "LARN 2024" | "ACSM/WHO";
 }> = [
-  { value: 1.2, label: "Sedentario", description: "Vita sedentaria, nessun esercizio" },
-  { value: 1.375, label: "Leggero", description: "1–3 allenamenti/settimana" },
-  { value: 1.55, label: "Moderato", description: "3–5 allenamenti/settimana" },
-  { value: 1.725, label: "Attivo", description: "6–7 allenamenti/settimana" },
-  { value: 1.9, label: "Estremo", description: "Lavoro fisico + allenamento giornaliero" },
+  {
+    value: 1.4,
+    livello: "sedentario",
+    label: "Sedentario",
+    description: "Attività quotidiana, senza esercizio strutturato",
+    fonte: "LARN 2024",
+  },
+  {
+    value: 1.55,
+    livello: "pocoattivo",
+    label: "Poco attivo",
+    description: "Lavoro sedentario e qualche movimento",
+    fonte: "LARN 2024",
+  },
+  {
+    value: 1.7,
+    livello: "attivo",
+    label: "Attivo",
+    description: "Allenamento regolare o lavoro fisico",
+    fonte: "LARN 2024",
+  },
+  {
+    value: 1.9,
+    livello: "moltoattivo",
+    label: "Molto attivo",
+    description: "Lavoro fisico e allenamento quotidiano",
+    fonte: "LARN 2024",
+  },
+  {
+    value: 1.2,
+    livello: null,
+    label: "Sedentario stretto",
+    description: "Vita sedentaria, nessun esercizio",
+    fonte: "ACSM/WHO",
+  },
+  {
+    value: 1.375,
+    livello: null,
+    label: "Leggero",
+    description: "1–3 allenamenti/settimana",
+    fonte: "ACSM/WHO",
+  },
+  {
+    value: 1.725,
+    livello: null,
+    label: "Molto attivo ACSM",
+    description: "6–7 allenamenti/settimana",
+    fonte: "ACSM/WHO",
+  },
 ];
+
+/** @deprecated usare LIVELLI_DISPENDIO; restano i valori ACSM storici. */
+export const ATTIVITA_FISICA = LIVELLI_DISPENDIO.filter((l) => l.fonte === "ACSM/WHO" || l.value === 1.55);
+
+export function etichettaLaf(value: number): string {
+  const hit = LIVELLI_DISPENDIO.find((l) => Math.abs(l.value - value) < 0.001);
+  if (!hit) return `LAF ${value.toLocaleString("it-IT", { maximumFractionDigits: 2 })}`;
+  const n = hit.value.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${hit.label} (${n}) · ${hit.fonte}`;
+}
+
+export function motivoBmrMancante(input: {
+  pesoKg: number | null;
+  altezzaCm: number | null;
+  etaAnni: number;
+  sesso: SessoInput;
+}): string | null {
+  if (!(input.pesoKg && input.pesoKg > 0)) return "Serve il peso della visita";
+  if (!(input.altezzaCm && input.altezzaCm > 0)) return "Serve l'altezza della visita";
+  if (!normalizzaSesso(input.sesso)) return "Serve il sesso: Maschio o Femmina";
+  if (!(input.etaAnni > 0)) return "Serve la data di nascita per calcolare l'età alla visita";
+  return null;
+}
+
+export function confrontoMetodiBmr(input: {
+  pesoKg: number | null;
+  altezzaCm: number | null;
+  etaAnni: number;
+  sesso: SessoInput;
+  ffmKg?: number | null;
+  laf: number;
+}): Array<{ metodo: MetodoBmr; label: string; bmr: number; tdee: number; fallbackFfm: boolean }> {
+  return METODI_BMR.map((m) => {
+    const r = calcolaBmrConMetodo({ ...input, metodo: m.value });
+    return {
+      metodo: m.value,
+      label: m.label,
+      bmr: r.bmr,
+      tdee: calcolaTdee(r.bmr, input.laf),
+      fallbackFfm: r.fallbackFfm,
+    };
+  });
+}
 
 /**
  * Label leggibili degli enum di fabbisogno: gli enum tecnici
@@ -160,12 +260,12 @@ export const BMR_FORMULA_LABELS: Record<MetodoBmr, string> = {
   Cunningham: "Cunningham",
 };
 
-export const LAF_LIVELLO_LABELS = {
+export const LAF_LIVELLO_LABELS: Record<LafLivello, string> = {
   sedentario: "Sedentario (1,40)",
   pocoattivo: "Poco attivo (1,55)",
   attivo: "Attivo (1,70)",
   moltoattivo: "Molto attivo (1,90)",
-} as const;
+};
 
 export function bmrFormulaLabel(
   value: string | null | undefined,

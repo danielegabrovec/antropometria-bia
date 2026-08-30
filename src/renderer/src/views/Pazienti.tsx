@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { filterPatients, patientLabel } from '@shared/library'
+import { calcolaEta } from '@shared/engine'
+import { filterPatients, patientLabel, sexLabel } from '@shared/library'
 import { useApp } from '../store/useApp'
+import { CreatePatientDialog, PatientFields } from '../components/anagrafica'
 
 export function Pazienti() {
   const patients = useApp((s) => s.patients)
@@ -12,6 +14,7 @@ export function Pazienti() {
   const remove = useApp((s) => s.removePatient)
   const setView = useApp((s) => s.setView)
   const [q, setQ] = useState('')
+  const [creating, setCreating] = useState(false)
   const list = filterPatients(patients, q)
   const p = patients.find((x) => x.id === pid) ?? null
   const nVisits = visits.filter((v) => v.patientId === pid).length
@@ -34,19 +37,14 @@ export function Pazienti() {
               <button key={x.id} className={`visit-item ${x.id === pid ? 'sel' : ''}`} onClick={() => select(x.id)}>
                 <div className="font-medium">{patientLabel(x)}</div>
                 <div className="text-[11px] text-[var(--color-mute)]">
-                  {x.sex ?? 'sesso —'} · {x.birthDate ?? 'nascita —'}
+                  {sexLabel(x.sex)}
+                  {x.birthDate ? ` · ${calcolaEta(x.birthDate)} anni` : ' · nascita —'}
                 </div>
               </button>
             ))
           )}
         </div>
-        <button
-          className="primary w-full mt-3"
-          onClick={() => {
-            const id = add({ nome: '', cognome: 'Nuovo paziente' })
-            select(id)
-          }}
-        >
+        <button className="primary w-full mt-3" onClick={() => setCreating(true)}>
           + Nuovo paziente
         </button>
       </div>
@@ -54,58 +52,19 @@ export function Pazienti() {
         {!p ? (
           <div className="panel">
             <h2 className="serif text-xl mb-2">Anagrafica pazienti</h2>
-            <p className="text-[var(--color-mute)]">Crea un paziente o selezionane uno a sinistra. In Misura puoi anche cercarlo mentre misuri.</p>
+            <p className="text-[var(--color-mute)]">
+              Crea un paziente o selezionane uno a sinistra. Sesso (Maschio o Femmina) e data di nascita servono ai
+              calcoli.
+            </p>
           </div>
         ) : (
           <>
             <h1 className="serif text-2xl mb-1">{patientLabel(p)}</h1>
-            <p className="text-[13px] text-[var(--color-mute)] mb-4">{nVisits} visite in archivio</p>
-            <div className="form-grid">
-              <div className="field">
-                <label>Nome</label>
-                <input value={p.nome} onChange={(e) => upsert({ id: p.id, nome: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Cognome</label>
-                <input value={p.cognome} onChange={(e) => upsert({ id: p.id, cognome: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Sesso</label>
-                <select
-                  value={p.sex ?? ''}
-                  onChange={(e) => upsert({ id: p.id, sex: (e.target.value || null) as typeof p.sex })}
-                >
-                  <option value="">Non indicato</option>
-                  <option value="M">Maschile</option>
-                  <option value="F">Femminile</option>
-                  <option value="Altro">Altro</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Data di nascita</label>
-                <input type="date" value={p.birthDate ?? ''} onChange={(e) => upsert({ id: p.id, birthDate: e.target.value || null })} />
-              </div>
-              <div className="field">
-                <label>Codice fiscale</label>
-                <input value={p.fiscalCode} onChange={(e) => upsert({ id: p.id, fiscalCode: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Telefono</label>
-                <input value={p.phone} onChange={(e) => upsert({ id: p.id, phone: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Email</label>
-                <input value={p.email} onChange={(e) => upsert({ id: p.id, email: e.target.value })} />
-              </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label>Indirizzo</label>
-                <input value={p.address} onChange={(e) => upsert({ id: p.id, address: e.target.value })} />
-              </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label>Note</label>
-                <textarea value={p.notes} onChange={(e) => upsert({ id: p.id, notes: e.target.value })} />
-              </div>
-            </div>
+            <p className="text-[13px] text-[var(--color-mute)] mb-4">
+              {nVisits} visite in archivio
+              {p.birthDate ? ` · ${calcolaEta(p.birthDate)} anni` : ''}
+            </p>
+            <PatientFields value={p} onChange={(patch) => upsert({ id: p.id, ...patch })} />
             <div className="flex gap-2 mt-4">
               <button
                 className="primary"
@@ -129,6 +88,14 @@ export function Pazienti() {
           </>
         )}
       </div>
+      <CreatePatientDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreate={(draft) => {
+          const id = add(draft)
+          select(id)
+        }}
+      />
     </div>
   )
 }

@@ -21,6 +21,22 @@ export {
   calculateJanssenSkeletalMuscle,
   calculateSergiEcw,
   selectBivaReference,
-  buildBivaInterpretation
+  buildBivaInterpretation,
+  buildBivaEllipse,
+  buildBivaReferenceBands,
+  buildBivaDistributionCurve,
+  formatBivaPercentile,
+  bivaAxisTicks,
+  bivaPlotRange,
+  BIVA_ZONE_LABELS,
+  BIVA_PHENOTYPE_ZONES
 } from './bia'
-export type { BiaAssessmentV2, BivaResult, NormalizedBiaSignal, BiaMetric } from './bia'
+export type {
+  BiaAssessmentV2,
+  BivaResult,
+  NormalizedBiaSignal,
+  BiaMetric,
+  BivaReferenceBand,
+  BivaDistributionCurve,
+  BivaDistributionTone
+} from './bia'

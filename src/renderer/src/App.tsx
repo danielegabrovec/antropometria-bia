@@ -31,6 +31,7 @@ import { Teoria } from './views/Teoria'
 import { Impostazioni } from './views/Impostazioni'
 import { Informazioni } from './views/Informazioni'
 import { currentDoctor } from './store/useApp'
+import { hydrateStore, usePersistStatus } from './lib/persist'
 
 const NAV: { id: ViewId; label: string; icon: typeof Activity }[] = [
   { id: 'misura', label: 'Misura', icon: Activity },
@@ -54,6 +55,7 @@ export function App() {
   const setPalette = useApp((s) => s.setPalette)
   const patients = useApp((s) => s.patients)
   const pid = useApp((s) => s.selectedPatientId)
+  const visitId = useApp((s) => s.selectedVisitId)
   const addVisit = useApp((s) => s.addVisit)
   const workspace = useApp((s) => s.workspace)
   const activeDoctorId = useApp((s) => s.activeDoctorId)
@@ -61,6 +63,7 @@ export function App() {
   const setActiveDoctor = useApp((s) => s.setActiveDoctor)
   const patient = patients.find((p) => p.id === pid) ?? null
   const doctor = doctors.find((d) => d.id === activeDoctorId) ?? doctors[0] ?? null
+  const persistence = usePersistStatus()
   const editor = view === 'misura'
   const gridClass = editor ? 'app-grid editor' : 'app-grid wide'
   const needDisclaimer = (settings.legalNoticeVersion ?? 0) < LEGAL_NOTICE_VERSION
@@ -94,6 +97,7 @@ export function App() {
               className={`rail-btn ${view === item.id ? 'active' : ''}`}
               title={item.label}
               aria-label={item.label}
+              aria-current={view === item.id ? 'page' : undefined}
               onClick={() => setView(item.id)}
             >
               <Icon size={18} strokeWidth={1.6} />
@@ -127,14 +131,21 @@ export function App() {
         ) : (
           <span className="chip on">{doctorLabel(doctor)}</span>
         )}
-        <button className="tb-btn" onClick={() => addVisit()}>
+        <button className="tb-btn" disabled={!patient} onClick={() => addVisit()}>
           Nuova visita
         </button>
         <ExportMenu />
-        <button className="tb-btn" onClick={() => setView('report')}>
+        <button className="tb-btn" disabled={!visitId} onClick={() => setView('report')}>
           Report
         </button>
         <span style={{ flex: 1 }} />
+        <span
+          className={`save-status ${persistence.status}`}
+          role={persistence.status === 'error' ? 'alert' : 'status'}
+          title={persistence.lastSavedAt ? `Ultimo salvataggio ${new Date(persistence.lastSavedAt).toLocaleTimeString('it-IT')}` : persistence.message}
+        >
+          {persistence.message}
+        </span>
         <span className="hair">{patientLabel(patient)}</span>
       </header>
       {view === 'misura' ? <Misura /> : null}
@@ -150,7 +161,22 @@ export function App() {
       {view === 'info' ? <Informazioni /> : null}
       <CommandPalette />
 
-      {needDisclaimer ? (
+      {persistence.blocking ? (
+        <div className="overlay">
+          <div className="palette" style={{ padding: 24, maxWidth: 560 }} role="alertdialog" aria-modal="true">
+            <div className="hair">Archivio locale</div>
+            <h2 className="serif text-2xl mt-2 mb-3">Impossibile aprire i dati in sicurezza</h2>
+            <p className="text-[var(--color-mute)] leading-relaxed">
+              {persistence.message} L’app non creerà una cartella vuota sopra un archivio che potrebbe essere recuperabile.
+            </p>
+            <button className="primary mt-4" onClick={() => void hydrateStore()}>
+              Riprova
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {!persistence.blocking && needDisclaimer ? (
         <div className="overlay">
           <div className="palette" style={{ padding: 24, maxWidth: 560 }}>
             <div className="hair">Prima di iniziare</div>
@@ -168,7 +194,7 @@ export function App() {
           </div>
         </div>
       ) : null}
-      {needWizard ? <Wizard /> : null}
+      {!persistence.blocking && needWizard ? <Wizard /> : null}
     </div>
   )
 }
