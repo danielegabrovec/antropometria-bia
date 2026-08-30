@@ -1,0 +1,16 @@
+node_modules
+out
+.tsc
+*.tsbuildinfo
+dist
+release
+.DS_Store
+Thumbs.db
+*.log
+.vite
+*.exe
+*.blockmap
+.idea
+.vscode
+.env
+.env.*
