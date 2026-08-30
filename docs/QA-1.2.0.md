@@ -44,6 +44,8 @@ Il controllo ha incluso preload/main IPC, origini renderer, CSP, URL esterni, im
 
 Resta una limitazione di distribuzione esplicita: non è disponibile un certificato Authenticode. Il pacchetto viene quindi pubblicato non firmato, con checksum SHA-256 e attestazione di provenienza GitHub.
 
+L'attestazione SLSA dell'installer scaricato è stata verificata imponendo repository `danielegabrovec/antropometria-bia`, workflow firmataria `.github/workflows/release.yml`, ref `refs/tags/v1.2.0`, commit sorgente `13b4b6d6dd68e46f06cb5d185abfd96de03c1fb6` e divieto di runner self-hosted. Il soggetto attestato coincide con il digest SHA-256 dell'asset pubblico e include un timestamp verificato.
+
 ## Pacchetto Windows
 
 Il contenuto `app.asar` della build `win-unpacked` è stato avviato con il runtime Electron ufficiale e ha superato primo avvio e wizard. Il criterio Windows Application Control del computer di collaudo blocca gli eseguibili non firmati e ha impedito l'avvio locale dell'EXE/NSIS; questo limite è stato isolato dalla qualità del pacchetto con un secondo collaudo sul runner Windows pulito.
