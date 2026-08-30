@@ -1,0 +1,87 @@
+name: Release smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag della release da collaudare
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Scarica, installa e avvia l'asset pubblico
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Tag non valido: $env:RELEASE_TAG"
+          }
+
+          $releaseDir = Join-Path $env:RUNNER_TEMP 'antropometria-bia-release'
+          $installDir = Join-Path $env:RUNNER_TEMP 'antropometria-bia-installed'
+          $userDataDir = Join-Path $env:RUNNER_TEMP 'antropometria-bia-user-data'
+          New-Item -ItemType Directory -Path $releaseDir | Out-Null
+
+          gh release download $env:RELEASE_TAG `
+            --repo $env:GITHUB_REPOSITORY `
+            --dir $releaseDir `
+            --pattern 'Antropometria-BIA-Setup-*.exe*'
+
+          $installer = Get-ChildItem -LiteralPath $releaseDir -Filter 'Antropometria-BIA-Setup-*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'Installer pubblico non trovato' }
+          $checksumFile = Get-Item -LiteralPath "$($installer.FullName).sha256"
+          $expectedHash = ((Get-Content -LiteralPath $checksumFile.FullName -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          $actualHash = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) { throw 'Checksum SHA-256 non corrispondente' }
+
+          $installerProcess = Start-Process -FilePath $installer.FullName `
+            -ArgumentList '/S', "/D=$installDir" `
+            -WindowStyle Hidden -PassThru -Wait
+          if ($installerProcess.ExitCode -ne 0) {
+            throw "Installer terminato con codice $($installerProcess.ExitCode)"
+          }
+
+          $appExe = Join-Path $installDir 'Antropometria BIA.exe'
+          if (-not (Test-Path -LiteralPath $appExe -PathType Leaf)) {
+            throw 'Eseguibile installato non trovato'
+          }
+          $expectedVersion = $env:RELEASE_TAG.TrimStart('v')
+          $installedVersion = (Get-Item -LiteralPath $appExe).VersionInfo.ProductVersion
+          if ($installedVersion -ne $expectedVersion) {
+            throw "Versione installata inattesa: $installedVersion"
+          }
+
+          $appProcess = Start-Process -FilePath $appExe `
+            -ArgumentList "--user-data-dir=$userDataDir" `
+            -WindowStyle Hidden -PassThru
+          Start-Sleep -Seconds 12
+          $liveProcesses = Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $appExe }
+          if (-not $liveProcesses) {
+            throw "L'app installata si è chiusa durante lo smoke test"
+          }
+          $liveProcesses | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 2
+
+          $uninstaller = Get-ChildItem -LiteralPath $installDir -Filter 'Uninstall*.exe' | Select-Object -First 1
+          if (-not $uninstaller) { throw 'Disinstallatore non trovato' }
+          $uninstallProcess = Start-Process -FilePath $uninstaller.FullName `
+            -ArgumentList '/S' -WindowStyle Hidden -PassThru -Wait
+          if ($uninstallProcess.ExitCode -ne 0) {
+            throw "Disinstallatore terminato con codice $($uninstallProcess.ExitCode)"
+          }
+          Start-Sleep -Seconds 3
+          if (Test-Path -LiteralPath $appExe) { throw 'Disinstallazione incompleta' }
+
+          "### Smoke release $env:RELEASE_TAG" | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          "- SHA-256: ``$actualHash``" | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          "- Versione installata: ``$installedVersion``" | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          '- Installazione silenziosa, avvio e disinstallazione: superati' | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
