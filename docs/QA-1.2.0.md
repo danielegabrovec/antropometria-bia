@@ -34,6 +34,10 @@ git diff --check          passato
 npm run dist:dir          passato
 ```
 
+- [CI del commit di release](https://github.com/danielegabrovec/antropometria-bia/actions/runs/33315508595): audit, typecheck, 40 test e build superati.
+- [Pipeline Release v1.2.0](https://github.com/danielegabrovec/antropometria-bia/actions/runs/33315566917): installer NSIS, checksum, attestazione e pubblicazione superati.
+- [Smoke dell'asset pubblico v1.2.0](https://github.com/danielegabrovec/antropometria-bia/actions/runs/33315915338): download, verifica SHA-256, installazione silenziosa, controllo versione, avvio e disinstallazione superati su `windows-latest`.
+
 ## Sicurezza
 
 Il controllo ha incluso preload/main IPC, origini renderer, CSP, URL esterni, import/export, persistenza e supply chain. Sono stati corretti contenimento dei percorsi, trust del mittente IPC, limiti import, URL consentiti, azioni GitHub non immutabili e integrità della release.
@@ -42,4 +46,6 @@ Resta una limitazione di distribuzione esplicita: non è disponibile un certific
 
 ## Pacchetto Windows
 
-Il contenuto `app.asar` della build `win-unpacked` è stato avviato con il runtime Electron ufficiale e ha superato primo avvio e wizard. Il criterio Windows Application Control del computer di collaudo blocca gli eseguibili locali appena confezionati e impedisce l'esecuzione locale dell'EXE/NSIS non firmato; per questo la generazione finale dell'installer è affidata al runner Windows pulito della workflow Release. La release è pubblicabile solo se quel job completa test, build, checksum, attestazione e upload dell'installer.
+Il contenuto `app.asar` della build `win-unpacked` è stato avviato con il runtime Electron ufficiale e ha superato primo avvio e wizard. Il criterio Windows Application Control del computer di collaudo blocca gli eseguibili non firmati e ha impedito l'avvio locale dell'EXE/NSIS; questo limite è stato isolato dalla qualità del pacchetto con un secondo collaudo sul runner Windows pulito.
+
+Il runner ha scaricato dalla release pubblica l'installer da 133.884.070 byte, ha ricalcolato il digest `9d34e715fd0b6f413555a50dba9ac9345d079b60b01fe4537183ec037cba37b6`, installato la versione `1.2.0.0` in una directory temporanea, avviato l'applicazione, verificato che restasse attiva e completato la disinstallazione silenziosa. L'asset distribuito è quindi stato collaudato senza richiedere una build all'utente finale.
