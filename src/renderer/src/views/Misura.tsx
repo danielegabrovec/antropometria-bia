@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { bodyModelVariantFromSex, skinfoldStateKeysFor, EQ_DENSITA_TO_STRICT } from '@shared/engine'
 import { MEASURES, MEASURE_BY_KEY, PRESET_LABELS, defaultGirths } from '@shared/catalog/measures'
 import { METODI_BMR } from '@shared/engine'
@@ -6,7 +6,8 @@ import { EQ_DENSITA_OPTIONS } from '@shared/engine'
 import { assessVisit } from '@shared/engine'
 import type { ProtocolPreset } from '@shared/types'
 import { useApp } from '../store/useApp'
-import { patientVisits, referenceVisit } from '../lib/delta'
+import { patientLabel, patientVisits, referenceVisit } from '../lib/delta'
+import { doctorLabel, filterPatients } from '@shared/library'
 import { fmt, parseIt } from '../lib/format'
 import FiguraCorpo, { type PinFigura } from '../components/FiguraCorpo'
 import { KpiCard } from '../components/KpiCard'
@@ -63,6 +64,12 @@ export function Misura() {
   const patchMeasure = useApp((s) => s.patchMeasure)
   const setPin = useApp((s) => s.setPin)
   const setDelta = useApp((s) => s.setDelta)
+  const [q, setQ] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [newNome, setNewNome] = useState('')
+  const [newCognome, setNewCognome] = useState('')
+  const doctors = useApp((s) => s.doctors)
+  const activeDoctorId = useApp((s) => s.activeDoctorId)
   const inspectorRef = useRef<HTMLInputElement>(null)
 
   const patient = patients.find((p) => p.id === pid) ?? null
@@ -116,28 +123,66 @@ export function Misura() {
   return (
     <>
       <aside className="library">
-        <div className="hair mb-2">Profili</div>
-        <div className="library-list" style={{ flex: '0 0 auto', maxHeight: 180 }}>
-          {patients.map((p) => (
+        <div className="hair mb-2">Paziente</div>
+        <input
+          className="search"
+          placeholder="Cerca o crea…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <div className="library-list" style={{ flex: '0 0 auto', maxHeight: 200, marginTop: 6 }}>
+          {filterPatients(patients, q).map((p) => (
             <button key={p.id} className={`visit-item ${p.id === pid ? 'sel' : ''}`} onClick={() => selectPatient(p.id)}>
-              <div className="font-medium">{p.alias}</div>
+              <div className="font-medium">{patientLabel(p)}</div>
               <div className="text-[11px] text-[var(--color-mute)]">
                 {p.sex ?? 'sesso —'} · {p.birthDate ?? 'nascita —'}
               </div>
             </button>
           ))}
         </div>
-        <button className="ghost w-full justify-center mb-3" onClick={() => addPatient()}>
-          + Profilo
-        </button>
+        {creating ? (
+          <div className="panel mb-3" style={{ padding: 8 }}>
+            <div className="field mb-1">
+              <label>Nome</label>
+              <input value={newNome} onChange={(e) => setNewNome(e.target.value)} />
+            </div>
+            <div className="field mb-1">
+              <label>Cognome</label>
+              <input value={newCognome} onChange={(e) => setNewCognome(e.target.value)} />
+            </div>
+            <button
+              className="primary w-full"
+              onClick={() => {
+                if (!newNome.trim() && !newCognome.trim()) return
+                addPatient({ nome: newNome.trim(), cognome: newCognome.trim() })
+                setCreating(false)
+                setNewNome('')
+                setNewCognome('')
+                setQ('')
+              }}
+            >
+              Salva paziente
+            </button>
+          </div>
+        ) : (
+          <button className="ghost w-full justify-center mb-3" onClick={() => setCreating(true)}>
+            + Nuovo paziente
+          </button>
+        )}
         <div className="hair mb-2">Visite</div>
         <div className="library-list">
-          {[...ordered].reverse().map((v) => (
-            <button key={v.id} className={`visit-item ${v.id === vid ? 'sel' : ''}`} onClick={() => selectVisit(v.id)}>
-              <div>{v.date}</div>
-              <div className="text-[11px] text-[var(--color-mute)]">{v.name}</div>
-            </button>
-          ))}
+          {[...ordered].reverse().map((v) => {
+            const op = doctors.find((d) => d.id === v.operatorDoctorId)
+            return (
+              <button key={v.id} className={`visit-item ${v.id === vid ? 'sel' : ''}`} onClick={() => selectVisit(v.id)}>
+                <div>{v.date}</div>
+                <div className="text-[11px] text-[var(--color-mute)]">
+                  {v.name}
+                  {op ? ` · ${doctorLabel(op)}` : ''}
+                </div>
+              </button>
+            )
+          })}
         </div>
         <button className="primary w-full mt-2" onClick={() => addVisit()}>
           + Nuova visita
@@ -148,7 +193,7 @@ export function Misura() {
         {!visit || !patient ? (
           <div className="panel">
             <h2 className="serif text-xl mb-2">Nessuna visita</h2>
-            <p className="text-[var(--color-mute)]">Crea un profilo e una visita dalla colonna a sinistra.</p>
+            <p className="text-[var(--color-mute)]">Cerca un paziente già in anagrafica o creane uno nuovo, poi aggiungi una visita. La visita resta intestata a {doctorLabel(doctors.find((d) => d.id === activeDoctorId) ?? null)}.</p>
           </div>
         ) : (
           <>
@@ -246,24 +291,35 @@ export function Misura() {
             ) : null}
 
             <div className="omini-row">
-              <FiguraCorpo
-                variant={variant}
-                vista="fronte"
-                pins={pins}
-                quote={assessed?.anthro.distribution}
-                onPinClick={setPin}
-                etichetta="Fronte"
-                selectedKey={pin}
-              />
-              <FiguraCorpo
-                variant={variant}
-                vista="retro"
-                pins={pins}
-                quote={assessed?.anthro.distribution}
-                onPinClick={setPin}
-                etichetta="Retro"
-                selectedKey={pin}
-              />
+              {variant ? (
+                <>
+                  <FiguraCorpo
+                    variant={variant}
+                    vista="fronte"
+                    pins={pins}
+                    quote={assessed?.anthro.distribution}
+                    onPinClick={setPin}
+                    etichetta="Fronte"
+                    selectedKey={pin}
+                  />
+                  <FiguraCorpo
+                    variant={variant}
+                    vista="retro"
+                    pins={pins}
+                    quote={assessed?.anthro.distribution}
+                    onPinClick={setPin}
+                    etichetta="Retro"
+                    selectedKey={pin}
+                  />
+                </>
+              ) : (
+                <div className="panel" style={{ gridColumn: '1 / -1', minHeight: 280 }}>
+                  <h2 className="serif text-xl mb-2">Indica il sesso per la mappa corporea</h2>
+                  <p className="text-[var(--color-mute)]">
+                    L’omino fotorealistico è disponibile solo per maschio o femmina (anagrafica o sesso della visita). «Altro» non viene convertito.
+                  </p>
+                </div>
+              )}
             </div>
             <p className="text-[11px] text-[var(--color-mute)]">
               Quota % fra i siti misurati col calibro, non una mappa di grasso viscerale. Pin tratteggiati = visita di riferimento (

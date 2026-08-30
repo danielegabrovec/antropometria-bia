@@ -1,7 +1,8 @@
 import { assessVisit, slopePerWeek } from '@shared/engine'
 import { MEASURES } from '@shared/catalog/measures'
+import { doctorLabel } from '@shared/library'
 import { useApp } from '../store/useApp'
-import { patientVisits, referenceVisit } from '../lib/delta'
+import { patientVisits, referenceVisit, patientLabel } from '../lib/delta'
 import { Chart, CHART_BASE } from '../components/Chart'
 import { fmt, fmtDelta } from '../lib/format'
 
@@ -22,6 +23,7 @@ export function Andamenti() {
   const vid = useApp((s) => s.selectedVisitId)
   const deltaMode = useApp((s) => s.settings.deltaMode)
   const setDelta = useApp((s) => s.setDelta)
+  const doctors = useApp((s) => s.doctors)
   const patient = patients.find((p) => p.id === pid) ?? null
   const ordered = patientVisits(visits, pid)
   const current = ordered.find((v) => v.id === vid) ?? ordered[ordered.length - 1] ?? null
@@ -42,9 +44,11 @@ export function Andamenti() {
   return (
     <div className="wide-page">
       <div className="hair">Andamenti</div>
-      <h1 className="serif text-2xl mb-2">Explorer e pivot</h1>
-      {ordered.length === 0 ? (
-        <p className="text-[var(--color-mute)]">Nessuna visita su questo profilo.</p>
+      <h1 className="serif text-2xl mb-2">Andamenti · {patientLabel(patient)}</h1>
+      {!patient ? (
+        <div className="panel">Seleziona un paziente da Pazienti o da Misura. I grafici restano per persona, nella cartella aperta.</div>
+      ) : ordered.length === 0 ? (
+        <p className="text-[var(--color-mute)]">Nessuna visita su questo paziente.</p>
       ) : (
         <>
           {ordered.length === 1 ? (
@@ -84,9 +88,14 @@ export function Andamenti() {
               <thead>
                 <tr>
                   <th>Misura</th>
-                  {ordered.map((v) => (
-                    <th key={v.id}>{v.date}</th>
-                  ))}
+                  {ordered.map((v) => {
+                    const op = doctors.find((d) => d.id === v.operatorDoctorId)
+                    return (
+                      <th key={v.id} title={doctorLabel(op ?? null)}>
+                        {v.date}
+                      </th>
+                    )
+                  })}
                   <th>Δ</th>
                 </tr>
               </thead>

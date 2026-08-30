@@ -1,12 +1,14 @@
 export type Sex = 'M' | 'F' | 'Altro'
 export type ClinicalSex = 'M' | 'F' | null
+export type WorkspaceKind = 'studio' | 'solo'
 
 export type ViewId =
   | 'misura'
   | 'analisi'
   | 'biva'
   | 'andamenti'
-  | 'profili'
+  | 'pazienti'
+  | 'dottori'
   | 'archivio'
   | 'report'
   | 'teoria'
@@ -26,11 +28,42 @@ export type FormulaPesoTeorico = 'BMI' | 'Lorenz' | 'Broca' | 'Devine' | 'Robins
 export type MetodoBmr = 'HarrisBenedict' | 'MifflinStJeor' | 'KatchMcArdle' | 'Cunningham'
 export type BiaInputKind = 'R_XC' | 'Z_XC'
 
+export interface DoctorProfile {
+  id: string
+  titolo: string
+  nome: string
+  cognome: string
+  sex: Sex | null
+  birthDate: string | null
+  fiscalCode: string
+  vatNumber: string
+  qualification: string
+  orderName: string
+  orderNumber: string
+  structure: string
+  address: string
+  zip: string
+  city: string
+  phone: string
+  mobile: string
+  email: string
+  pec: string
+  website: string
+  notes: string
+  createdAt: string
+}
+
 export interface PatientProfile {
   id: string
+  nome: string
+  cognome: string
   alias: string
   sex: Sex | null
   birthDate: string | null
+  fiscalCode: string
+  phone: string
+  email: string
+  address: string
   notes: string
   createdAt: string
 }
@@ -44,7 +77,6 @@ export interface BiaAcquisition {
   measurementSite: 'whole_body'
   deviceProfileId: 'akern-101' | 'altro'
   bivaProfileId: string | null
-  /** Output strumento: mai sintetizzati dal motore. */
   deviceBcmKg: number | null
   deviceEcmKg: number | null
   deviceNaK: number | null
@@ -53,6 +85,7 @@ export interface BiaAcquisition {
 export interface Visit {
   id: string
   patientId: string
+  operatorDoctorId: string | null
   name: string
   date: string
   createdAt: string
@@ -67,7 +100,6 @@ export interface Visit {
   pesoTeorico: FormulaPesoTeorico
   formulaBmr: MetodoBmr
   laf: number
-  /** Valori in mm (pliche) o cm (circonferenze/diametri). */
   measures: Record<string, number | null>
   enabledGirths: string[]
   bia: BiaAcquisition
@@ -86,12 +118,54 @@ export interface StudioIdentity {
   piva: string
 }
 
+export const LEGAL_NOTICE_VERSION = 2
+
 export interface AppSettings {
   disclaimerAccepted: boolean
+  legalNoticeVersion: number
+  wizardCompleted: boolean
   deltaMode: DeltaMode
   studio: StudioIdentity
 }
 
+export interface WorkspaceMeta {
+  id: string
+  name: string
+  kind: WorkspaceKind
+}
+
+export const INDEX_KIND = 'antropometria-bia-index' as const
+export const INDEX_VERSION = 1 as const
+
+export interface AppIndex {
+  kind: typeof INDEX_KIND
+  version: typeof INDEX_VERSION
+  workspaces: WorkspaceMeta[]
+  activeWorkspaceId: string | null
+}
+
+export const WORKSPACE_KIND = 'antropometria-bia-workspace' as const
+export const WORKSPACE_VERSION = 1 as const
+
+export interface WorkspaceFile {
+  kind: typeof WORKSPACE_KIND
+  version: typeof WORKSPACE_VERSION
+  exportedAt: string
+  workspace: WorkspaceMeta
+  doctors: DoctorProfile[]
+  patients: PatientProfile[]
+  visits: Visit[]
+  settings: AppSettings
+  draft: WorkspaceDraft
+}
+
+export interface WorkspaceDraft {
+  selectedPatientId: string | null
+  selectedVisitId: string | null
+  activeDoctorId: string | null
+}
+
+/** @deprecated vecchio export v1 — ancora letto in import */
 export const LIBRARY_KIND = 'antropometria-bia-library' as const
 export const LIBRARY_VERSION = 1 as const
 
@@ -101,6 +175,16 @@ export interface LibraryFile {
   exportedAt: string
   patients: PatientProfile[]
   visits: Visit[]
+}
+
+export const ANAGRAFICA_KIND = 'antropometria-bia-anagrafiche' as const
+
+export interface AnagraficaFile {
+  kind: typeof ANAGRAFICA_KIND
+  version: 1
+  exportedAt: string
+  doctors: DoctorProfile[]
+  patients: PatientProfile[]
 }
 
 export interface PersistPayload {
@@ -115,20 +199,29 @@ export interface PersistPayload {
 
 export const DEFAULT_STUDIO: StudioIdentity = {
   nome: '',
-  titolare: 'Daniele Gabrovec',
-  qualifica: 'Biologo Nutrizionista',
+  titolare: '',
+  qualifica: '',
   sede: '',
   telefono: '',
   email: '',
   sito: '',
-  ordine: 'Ordine dei Biologi del Triveneto n. TRI_A2489',
+  ordine: '',
   piva: ''
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   disclaimerAccepted: false,
+  legalNoticeVersion: 0,
+  wizardCompleted: false,
   deltaMode: 'precedente',
   studio: { ...DEFAULT_STUDIO }
+}
+
+export const EMPTY_INDEX: AppIndex = {
+  kind: INDEX_KIND,
+  version: INDEX_VERSION,
+  workspaces: [],
+  activeWorkspaceId: null
 }
 
 export function emptyBia(): BiaAcquisition {

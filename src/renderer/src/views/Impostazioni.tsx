@@ -1,3 +1,4 @@
+import { COPYRIGHT_NOTICE, COPYRIGHT_SHORT } from '@shared/catalog/about'
 import { useApp } from '../store/useApp'
 import type { StudioIdentity } from '@shared/types'
 
@@ -20,7 +21,9 @@ export function Impostazioni() {
     <div className="wide-page" style={{ maxWidth: 520 }}>
       <div className="hair">Opzioni</div>
       <h1 className="serif text-2xl mb-4">Identità dello studio</h1>
-      <p className="text-[13px] text-[var(--color-mute)] mb-4">Compare in testa e in coda al report. Resta sul computer.</p>
+      <p className="text-[13px] text-[var(--color-mute)] mb-4">
+        Intestazione di stampa. Si allinea al dottore attivo; puoi ritoccarla qui per questa cartella. I profili dottore si gestiscono in Dottori.
+      </p>
       {FIELDS.map((f) => (
         <div className="field" key={f.key}>
           <label>{f.label}</label>
@@ -30,6 +33,15 @@ export function Impostazioni() {
           />
         </div>
       ))}
+      <p className="credit" style={{ marginTop: 28, whiteSpace: 'pre-wrap' }} title={COPYRIGHT_NOTICE}>
+        {COPYRIGHT_SHORT}
+        <br />
+        Vietata la riproduzione, anche parziale.
+        <br />
+        <button type="button" className="ghost" style={{ marginTop: 8 }} onClick={() => useApp.getState().setView('info')}>
+          Informazioni, autore e diritti
+        </button>
+      </p>
     </div>
   )
 }

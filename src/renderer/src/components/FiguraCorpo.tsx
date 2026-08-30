@@ -1,12 +1,10 @@
 import { BODY_ANCHORS, heatColor, type BodyModelVariant, type QuotaDistretto } from '@shared/engine'
-import maleImg from '../assets/body-models/male-front-back.webp'
-import femaleImg from '../assets/body-models/female-front-back.webp'
-import neutralImg from '../assets/body-models/neutral-front-back.webp'
+import maleImg from '../assets/body-models/male-front-back.png'
+import femaleImg from '../assets/body-models/female-front-back.png'
 
 const MODELS: Record<BodyModelVariant, string> = {
   male: maleImg,
-  female: femaleImg,
-  neutral: neutralImg
+  female: femaleImg
 }
 
 export interface PinFigura {

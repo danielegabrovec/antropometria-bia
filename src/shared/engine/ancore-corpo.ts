@@ -18,7 +18,8 @@
  * Modulo puro: nessun React, nessun DOM.
  */
 
-export type BodyModelVariant = "male" | "female" | "neutral";
+export type BodyModelVariant = 'male' | 'female'
+export type BodyModelId = BodyModelVariant | 'neutral'
 
 export interface AncoraCorpo {
   /** Frazione orizzontale [0,1] dell'immagine combinata fronte+retro. */
@@ -58,7 +59,7 @@ export const SITI_SUL_RETRO = [
  * accatastare i pallini sullo stesso braccio.
  */
 export const BODY_ANCHORS: Record<
-  BodyModelVariant,
+  BodyModelId,
   Record<string, AncoraCorpo>
 > = {
   male: {
@@ -190,8 +191,8 @@ export function proiettaAncora(
   };
 }
 
-export function bodyModelVariantFromSex(sex: unknown): BodyModelVariant {
+export function bodyModelVariantFromSex(sex: unknown): BodyModelVariant | null {
   if (sex === 'M' || sex === 'male') return 'male'
   if (sex === 'F' || sex === 'female') return 'female'
-  return 'neutral'
+  return null
 }

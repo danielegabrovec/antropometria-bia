@@ -1,36 +1,37 @@
 import { create } from 'zustand'
 import type {
+  AppIndex,
   AppSettings,
   DeltaMode,
+  DoctorProfile,
   PatientProfile,
-  PersistPayload,
   ProtocolPreset,
   ViewId,
-  Visit
+  Visit,
+  WorkspaceFile,
+  WorkspaceKind,
+  WorkspaceMeta
 } from '@shared/types'
-import { DEFAULT_SETTINGS, emptyBia } from '@shared/types'
+import { DEFAULT_SETTINGS, DEFAULT_STUDIO, emptyBia, EMPTY_INDEX, LEGAL_NOTICE_VERSION } from '@shared/types'
 import { defaultGirths } from '@shared/catalog/measures'
-import { uid } from '@shared/library'
+import {
+  displayName,
+  doctorFromStudio,
+  doctorLabel,
+  emptyDoctor,
+  emptyPatient,
+  parseWorkspace,
+  studioFromDoctor,
+  today,
+  uid,
+  withPatientAlias
+} from '@shared/library'
 
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function newPatient(): PatientProfile {
-  return {
-    id: uid(),
-    alias: 'Nuovo profilo',
-    sex: null,
-    birthDate: null,
-    notes: '',
-    createdAt: new Date().toISOString()
-  }
-}
-
-function newVisit(patientId: string, preset: ProtocolPreset = 'essenziale'): Visit {
+function newVisit(patientId: string, operatorDoctorId: string | null, preset: ProtocolPreset = 'essenziale'): Visit {
   return {
     id: uid(),
     patientId,
+    operatorDoctorId,
     name: 'Visita',
     date: today(),
     createdAt: new Date().toISOString(),
@@ -55,8 +56,12 @@ function newVisit(patientId: string, preset: ProtocolPreset = 'essenziale'): Vis
 interface AppState {
   ready: boolean
   view: ViewId
+  index: AppIndex
+  workspace: WorkspaceMeta | null
+  doctors: DoctorProfile[]
   patients: PatientProfile[]
   visits: Visit[]
+  activeDoctorId: string | null
   selectedPatientId: string | null
   selectedVisitId: string | null
   selectedPin: string | null
@@ -66,10 +71,22 @@ interface AppState {
   setPin: (key: string | null) => void
   setDelta: (m: DeltaMode) => void
   acceptDisclaimer: () => void
-  hydrate: (p: Partial<PersistPayload> & { patients?: PatientProfile[]; visits?: Visit[] }) => void
-  snapshot: () => PersistPayload
+  setPalette: (open: boolean) => void
+  patchSettings: (p: Partial<AppSettings>) => void
+  applyIndex: (index: AppIndex) => void
+  applyWorkspace: (file: WorkspaceFile) => void
+  snapshotWorkspace: () => WorkspaceFile | null
+  completeWizard: (input: {
+    kind: WorkspaceKind
+    workspaceName: string
+    doctor: Partial<DoctorProfile>
+  }) => WorkspaceFile
+  addDoctor: (partial?: Partial<DoctorProfile>) => string
+  upsertDoctor: (p: Partial<DoctorProfile> & { id: string }) => void
+  removeDoctor: (id: string) => void
+  setActiveDoctor: (id: string) => void
   upsertPatient: (p: Partial<PatientProfile> & { id: string }) => void
-  addPatient: () => string
+  addPatient: (partial?: Partial<PatientProfile>) => string
   removePatient: (id: string) => void
   addVisit: () => string | null
   patchVisit: (id: string, patch: Partial<Visit>) => void
@@ -78,58 +95,184 @@ interface AppState {
   removeVisit: (id: string) => void
   selectPatient: (id: string) => void
   selectVisit: (id: string) => void
-  replaceLibrary: (patients: PatientProfile[], visits: Visit[]) => void
-  patchSettings: (p: Partial<AppSettings>) => void
-  setPalette: (open: boolean) => void
+  replaceWorkspaceData: (file: WorkspaceFile) => void
+  createIsolatedWorkspace: (doctor: Partial<DoctorProfile>, name: string) => WorkspaceFile
+  dropCurrentWorkspace: () => { removedId: string; next: AppIndex }
+}
+
+function syncStudio(get: () => AppState): AppSettings {
+  const s = get()
+  const doc = s.doctors.find((d) => d.id === s.activeDoctorId) ?? s.doctors[0]
+  if (!doc) return s.settings
+  return {
+    ...s.settings,
+    studio: studioFromDoctor(doc, s.workspace?.name ?? '')
+  }
 }
 
 export const useApp = create<AppState>((set, get) => ({
   ready: false,
   view: 'misura',
+  index: { ...EMPTY_INDEX },
+  workspace: null,
+  doctors: [],
   patients: [],
   visits: [],
+  activeDoctorId: null,
   selectedPatientId: null,
   selectedVisitId: null,
   selectedPin: null,
-  settings: { ...DEFAULT_SETTINGS, studio: { ...DEFAULT_SETTINGS.studio } },
+  settings: { ...DEFAULT_SETTINGS, studio: { ...DEFAULT_STUDIO } },
   paletteOpen: false,
 
   setView: (view) => set({ view }),
   setPin: (selectedPin) => set({ selectedPin }),
   setDelta: (deltaMode) => set({ settings: { ...get().settings, deltaMode } }),
-  acceptDisclaimer: () => set({ settings: { ...get().settings, disclaimerAccepted: true } }),
+  acceptDisclaimer: () =>
+    set({
+      settings: { ...get().settings, disclaimerAccepted: true, legalNoticeVersion: LEGAL_NOTICE_VERSION }
+    }),
   setPalette: (paletteOpen) => set({ paletteOpen }),
-  patchSettings: (p) => set({ settings: { ...get().settings, ...p, studio: { ...get().settings.studio, ...(p.studio ?? {}) } } }),
+  patchSettings: (p) =>
+    set({ settings: { ...get().settings, ...p, studio: { ...get().settings.studio, ...(p.studio ?? {}) } } }),
 
-  hydrate: (data) => {
-    const patients = data.patients ?? []
-    const visits = data.visits ?? []
-    const draft = data.draft
+  applyIndex: (index) => set({ index }),
+
+  applyWorkspace: (file) => {
+    const doctors = file.doctors.length
+      ? file.doctors
+      : file.settings?.studio?.titolare
+        ? [doctorFromStudio(file.settings.studio)]
+        : []
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      ...file.settings,
+      studio: { ...DEFAULT_STUDIO, ...file.settings?.studio }
+    }
+    const activeDoctorId = file.draft.activeDoctorId ?? doctors[0]?.id ?? null
     set({
       ready: true,
-      patients,
-      visits,
-      selectedPatientId: draft?.selectedPatientId ?? patients[0]?.id ?? null,
-      selectedVisitId: draft?.selectedVisitId ?? visits[0]?.id ?? null,
-      settings: draft?.settings
-        ? { ...DEFAULT_SETTINGS, ...draft.settings, studio: { ...DEFAULT_SETTINGS.studio, ...draft.settings.studio } }
+      workspace: file.workspace,
+      doctors,
+      patients: file.patients,
+      visits: file.visits,
+      activeDoctorId,
+      selectedPatientId: file.draft.selectedPatientId ?? file.patients[0]?.id ?? null,
+      selectedVisitId: file.draft.selectedVisitId ?? file.visits[0]?.id ?? null,
+      settings: {
+        ...settings,
+        wizardCompleted: Boolean(settings.wizardCompleted || doctors.length > 0),
+        studio: doctors[0]
+          ? studioFromDoctor(doctors.find((d) => d.id === activeDoctorId) ?? doctors[0], file.workspace.name)
+          : settings.studio
+      },
+      index: {
+        ...get().index,
+        workspaces: get().index.workspaces.some((w) => w.id === file.workspace.id)
+          ? get().index.workspaces.map((w) => (w.id === file.workspace.id ? file.workspace : w))
+          : [...get().index.workspaces, file.workspace],
+        activeWorkspaceId: file.workspace.id
+      }
+    })
+  },
+
+  snapshotWorkspace: () => {
+    const s = get()
+    if (!s.workspace) return null
+    return {
+      kind: 'antropometria-bia-workspace',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      workspace: s.workspace,
+      doctors: s.doctors,
+      patients: s.patients,
+      visits: s.visits,
+      settings: syncStudio(get),
+      draft: {
+        selectedPatientId: s.selectedPatientId,
+        selectedVisitId: s.selectedVisitId,
+        activeDoctorId: s.activeDoctorId
+      }
+    }
+  },
+
+  completeWizard: ({ kind, workspaceName, doctor }) => {
+    const d = emptyDoctor({
+      ...doctor,
+      qualification: doctor.qualification || 'Biologo Nutrizionista'
+    })
+    const workspace: WorkspaceMeta = {
+      id: uid(),
+      name: workspaceName.trim() || (kind === 'studio' ? 'Studio' : doctorLabel(d)),
+      kind
+    }
+    const file: WorkspaceFile = {
+      kind: 'antropometria-bia-workspace',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      workspace,
+      doctors: [d],
+      patients: [],
+      visits: [],
+      settings: {
+        ...get().settings,
+        wizardCompleted: true,
+        disclaimerAccepted: true,
+        legalNoticeVersion: LEGAL_NOTICE_VERSION,
+        studio: studioFromDoctor(d, workspace.name)
+      },
+      draft: { selectedPatientId: null, selectedVisitId: null, activeDoctorId: d.id }
+    }
+    get().applyWorkspace(file)
+    return file
+  },
+
+  addDoctor: (partial) => {
+    if (get().workspace?.kind === 'solo' && get().doctors.length >= 1) {
+      return get().doctors[0].id
+    }
+    const d = emptyDoctor(partial)
+    set({ doctors: [...get().doctors, d], activeDoctorId: d.id, settings: { ...get().settings, studio: studioFromDoctor(d, get().workspace?.name ?? '') } })
+    return d.id
+  },
+
+  upsertDoctor: (p) => {
+    const doctors = get().doctors.map((x) => (x.id === p.id ? { ...x, ...p } : x))
+    const active = doctors.find((d) => d.id === get().activeDoctorId) ?? doctors[0]
+    set({
+      doctors,
+      settings: active
+        ? { ...get().settings, studio: studioFromDoctor(active, get().workspace?.name ?? '') }
         : get().settings
     })
   },
 
-  snapshot: () => ({
-    patients: get().patients,
-    visits: get().visits,
-    draft: {
-      selectedPatientId: get().selectedPatientId,
-      selectedVisitId: get().selectedVisitId,
-      settings: get().settings
-    }
-  }),
+  removeDoctor: (id) => {
+    const doctors = get().doctors.filter((d) => d.id !== id)
+    if (doctors.length === 0) return
+    const activeDoctorId = get().activeDoctorId === id ? doctors[0].id : get().activeDoctorId
+    const visits = get().visits.map((v) => (v.operatorDoctorId === id ? { ...v, operatorDoctorId: activeDoctorId } : v))
+    const active = doctors.find((d) => d.id === activeDoctorId) ?? doctors[0]
+    set({
+      doctors,
+      visits,
+      activeDoctorId,
+      settings: { ...get().settings, studio: studioFromDoctor(active, get().workspace?.name ?? '') }
+    })
+  },
 
-  addPatient: () => {
-    const p = newPatient()
-    const v = newVisit(p.id)
+  setActiveDoctor: (id) => {
+    const d = get().doctors.find((x) => x.id === id)
+    if (!d) return
+    set({
+      activeDoctorId: id,
+      settings: { ...get().settings, studio: studioFromDoctor(d, get().workspace?.name ?? '') }
+    })
+  },
+
+  addPatient: (partial) => {
+    const p = withPatientAlias(emptyPatient(partial))
+    const v = newVisit(p.id, get().activeDoctorId)
     set({
       patients: [...get().patients, p],
       visits: [...get().visits, v],
@@ -141,7 +284,7 @@ export const useApp = create<AppState>((set, get) => ({
 
   upsertPatient: (p) =>
     set({
-      patients: get().patients.map((x) => (x.id === p.id ? { ...x, ...p } : x))
+      patients: get().patients.map((x) => (x.id === p.id ? withPatientAlias({ ...x, ...p }) : x))
     }),
 
   removePatient: (id) => {
@@ -163,7 +306,7 @@ export const useApp = create<AppState>((set, get) => ({
   addVisit: () => {
     const pid = get().selectedPatientId
     if (!pid) return null
-    const v = newVisit(pid)
+    const v = newVisit(pid, get().activeDoctorId)
     set({ visits: [...get().visits, v], selectedVisitId: v.id })
     return v.id
   },
@@ -171,7 +314,9 @@ export const useApp = create<AppState>((set, get) => ({
   patchVisit: (id, patch) =>
     set({
       visits: get().visits.map((v) =>
-        v.id === id ? { ...v, ...patch, updatedAt: new Date().toISOString(), bia: patch.bia ? { ...v.bia, ...patch.bia } : v.bia } : v
+        v.id === id
+          ? { ...v, ...patch, updatedAt: new Date().toISOString(), bia: patch.bia ? { ...v.bia, ...patch.bia } : v.bia }
+          : v
       )
     }),
 
@@ -180,9 +325,7 @@ export const useApp = create<AppState>((set, get) => ({
     if (!id) return
     set({
       visits: get().visits.map((v) =>
-        v.id === id
-          ? { ...v, measures: { ...v.measures, [key]: value }, updatedAt: new Date().toISOString() }
-          : v
+        v.id === id ? { ...v, measures: { ...v.measures, [key]: value }, updatedAt: new Date().toISOString() } : v
       )
     })
   },
@@ -193,6 +336,7 @@ export const useApp = create<AppState>((set, get) => ({
     const copy: Visit = {
       ...src,
       id: uid(),
+      operatorDoctorId: get().activeDoctorId,
       name: `${src.name} (copia)`,
       date: today(),
       createdAt: new Date().toISOString(),
@@ -211,15 +355,62 @@ export const useApp = create<AppState>((set, get) => ({
     set({ visits, selectedVisitId: next?.id ?? null })
   },
 
-  selectVisit: (id) => set({ selectedVisitId: id, selectedPin: null }),
+  selectVisit: (id) => {
+    const v = get().visits.find((x) => x.id === id)
+    set({ selectedVisitId: id, selectedPatientId: v?.patientId ?? get().selectedPatientId, selectedPin: null })
+  },
 
-  replaceLibrary: (patients, visits) =>
+  replaceWorkspaceData: (file) => get().applyWorkspace(file),
+
+  createIsolatedWorkspace: (doctor, name) => {
+    const d = emptyDoctor(doctor)
+    const workspace: WorkspaceMeta = {
+      id: uid(),
+      name: name.trim() || doctorLabel(d),
+      kind: 'solo'
+    }
+    const file: WorkspaceFile = {
+      kind: 'antropometria-bia-workspace',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      workspace,
+      doctors: [d],
+      patients: [],
+      visits: [],
+      settings: {
+        ...DEFAULT_SETTINGS,
+        wizardCompleted: true,
+        disclaimerAccepted: true,
+        legalNoticeVersion: LEGAL_NOTICE_VERSION,
+        studio: studioFromDoctor(d, workspace.name)
+      },
+      draft: { selectedPatientId: null, selectedVisitId: null, activeDoctorId: d.id }
+    }
+    get().applyWorkspace(file)
+    return file
+  },
+
+  dropCurrentWorkspace: () => {
+    const s = get()
+    const removedId = s.workspace?.id ?? ''
+    const workspaces = s.index.workspaces.filter((w) => w.id !== removedId)
+    const next: AppIndex = {
+      ...s.index,
+      workspaces,
+      activeWorkspaceId: workspaces[0]?.id ?? null
+    }
     set({
-      patients,
-      visits,
-      selectedPatientId: patients[0]?.id ?? null,
-      selectedVisitId: visits[0]?.id ?? null
+      index: next,
+      workspace: null,
+      doctors: [],
+      patients: [],
+      visits: [],
+      activeDoctorId: null,
+      selectedPatientId: null,
+      selectedVisitId: null
     })
+    return { removedId, next }
+  }
 }))
 
 export function currentPatient(): PatientProfile | null {
@@ -231,3 +422,16 @@ export function currentVisit(): Visit | null {
   const s = useApp.getState()
   return s.visits.find((v) => v.id === s.selectedVisitId) ?? null
 }
+
+export function currentDoctor(): DoctorProfile | null {
+  const s = useApp.getState()
+  return s.doctors.find((d) => d.id === s.activeDoctorId) ?? s.doctors[0] ?? null
+}
+
+export function hydrateFromParsed(file: unknown) {
+  const parsed = parseWorkspace(file)
+  if (parsed) useApp.getState().applyWorkspace(parsed)
+}
+
+void displayName
+void doctorFromStudio

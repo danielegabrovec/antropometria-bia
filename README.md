@@ -16,17 +16,19 @@ Strumento **locale** di antropometria e BIA/BIVA per la composizione corporea, s
 
 ## Cosa fa
 
-- **Antropometria** — pliche Jackson-Pollock 3/4/7 e Durnin-Womersley, Siri/Brozek, circonferenze, BMI, WHR, WHtR, artometria, Heymsfield, Heath-Carter, omini fotografici uomo/donna/neutro con pin e heat.
+- **Cartelle dottore** — all’avvio un wizard crea il profilo (studio condiviso o cartella personale). Nello studio i pazienti sono in comune e su ogni visita compare chi ha misurato; le cartelle personali restano isolate.
+- **Pazienti** — anagrafica completa, ricerca, crea/modifica/elimina. In Misura: cerca un paziente già presente o creane uno nuovo.
+- **Antropometria** — pliche Jackson-Pollock 3/4/7 e Durnin-Womersley, Siri/Brozek, circonferenze, BMI, WHR, WHtR, artometria, Heymsfield, Heath-Carter, omini fotorealistici uomo/donna fronte e retro con pin e heat (senza sesso M/F la mappa resta spenta).
 - **BIA/BIVA** — profilo AKERN 101 (R + Xc, 50 kHz total-body): Sun, Janssen, Sergi, vettore R/H × Xc/H con ellissi Campa. BCM solo se lo inserisci dallo strumento.
-- **Statistiche** — andamenti anche con una visita, Δ unico (precedente o prima), pendenza, Bland-Altman pliche vs BIA.
-- **Report** — anteprima, PDF A4, CSV. Tutto gira in locale: nessun account, nessun cloud.
+- **Statistiche** — andamenti anche con una visita, Δ unico (precedente o prima), pendenza, Bland-Altman pliche vs BIA, nome dell’operatore.
+- **Export / import** — cartella intera in JSON, HTML, PDF, Stampa. Visita in HTML, PDF, Stampa, JSON. Anagrafiche in XLS, PDF, HTML, JSON, DOCX, Stampa; import anagrafiche da JSON e XLS. Tutto locale: nessun account, nessun cloud.
 
 ## Installazione (Windows)
 
 1. Apri la pagina [Releases](https://github.com/danielegabrovec/antropometria-bia/releases).
-2. Scarica `Antropometria-BIA-Setup-1.0.0.exe` (installer NSIS, 64 bit).
+2. Scarica `Antropometria-BIA-Setup-1.1.0.exe` (installer NSIS, 64 bit).
 3. Esegui il file (lingua italiana, si può scegliere la cartella).
-4. All’avvio accetta l’avvertenza.
+4. All’avvio accetta l’avvertenza e crea il profilo dottore.
 
 ### SmartScreen
 
@@ -59,8 +61,18 @@ npm run dev
 
 ## Layout
 
-Rail a sinistra (come Kinetica, suite sorella). In **Misura**: profili e visite | omini fronte/retro | ispettore del pin e blocco BIA. Peso e altezza si scrivono una volta: antropometria e BIA non si fondono sui KPI.
+Rail a sinistra (come Kinetica, suite sorella): Misura, Analisi, BIVA, Andamenti, Pazienti, Dottori, Archivio, Report, Teoria, Opzioni, Info. In **Misura**: cerca/crea paziente | omini fronte/retro | ispettore del pin e blocco BIA. Peso e altezza si scrivono una volta: antropometria e BIA non si fondono sui KPI.
 
 ## Motore
 
 Porte da `@nutriva/clinical` (Sun 2003, Janssen 2000, Sergi, Jackson-Pollock, Durnin-Womersley, Gallagher 2000, BIVA Campa). Fuori dalla finestra di età il numero può uscire con riserva. Sesso «Altro» non viene convertito in maschio.
+
+## Autore e diritti
+
+**Antropometria BIA è stata creata da Daniele Gabrovec.**
+
+© 2026 Daniele Gabrovec. Tutti i diritti riservati.
+
+Vietata la riproduzione, anche parziale, la copia, la modifica, la distribuzione e qualsiasi uso non autorizzato, senza il consenso scritto dell’autore.
+
+Nessuna garanzia. Non è un dispositivo medico.
